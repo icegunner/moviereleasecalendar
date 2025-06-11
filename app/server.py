@@ -1,7 +1,10 @@
 from flask import Flask, send_file, jsonify, render_template_string
-from db import get_all_movies
+from db import get_all_movies, init_db
 
 app = Flask(__name__)
+
+# Initialize database session
+init_db()
 
 @app.route("/calendar.ics")
 def serve_ics():
