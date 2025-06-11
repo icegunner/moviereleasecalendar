@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf-8' />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Movie Release Calendar</title>
+  <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/main.min.css' rel='stylesheet' />
+  <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/main.min.js'></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: #ffffff;
+    }
+    #calendar {
+      height: 95%;
+    }
+    .toolbar {
+      padding: 10px;
+      background-color: #1e1e1e;
+      color: white;
+      text-align: right;
+    }
+    .fc-theme-standard .fc-scrollgrid {
+      border-color: #444;
+    }
+    .fc-daygrid-event {
+      background-color: #333;
+      color: #fff;
+    }
+    .light-mode {
+      background-color: #ffffff;
+      color: #000000;
+    }
+    .light-mode .fc-daygrid-event {
+      background-color: #e0e0e0;
+      color: #000000;
+    }
+    .light-mode .toolbar {
+      background-color: #f0f0f0;
+      color: #000000;
+    }
+    .light-mode .fc-theme-standard .fc-scrollgrid {
+      border-color: #ccc;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <label><input type="checkbox" id="toggleMode" checked> Dark Mode</label>
+  </div>
+  <div id='calendar'></div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const body = document.body;
+      const toggle = document.getElementById("toggleMode");
+
+      toggle.addEventListener('change', function() {
+        if (toggle.checked) {
+          body.classList.remove("light-mode");
+        } else {
+          body.classList.add("light-mode");
+        }
+      });
+
+      fetch('/calendar.json')
+        .then(response => response.json())
+        .then(data => {
+          var calendarEl = document.getElementById('calendar');
+          var calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+              left: 'prev,next today',
+              center: 'title',
+              right: 'dayGridMonth,timeGridWeek'
+            },
+            eventDidMount: function(info) {
+              if (info.event.extendedProps.description) {
+                let tooltip = document.createElement('div');
+                tooltip.innerHTML = info.event.extendedProps.description;
+                tooltip.style.position = 'absolute';
+                tooltip.style.background = '#222';
+                tooltip.style.color = '#fff';
+                tooltip.style.padding = '8px';
+                tooltip.style.borderRadius = '4px';
+                tooltip.style.zIndex = 1000;
+                tooltip.style.display = 'none';
+                tooltip.classList.add('fc-tooltip');
+                document.body.appendChild(tooltip);
+
+                info.el.addEventListener('mouseenter', function() {
+                  tooltip.style.left = (info.jsEvent.pageX + 10) + 'px';
+                  tooltip.style.top = (info.jsEvent.pageY + 10) + 'px';
+                  tooltip.style.display = 'block';
+                });
+                info.el.addEventListener('mouseleave', function() {
+                  tooltip.style.display = 'none';
+                });
+              }
+            },
+            eventClick: function(info) {
+              if (info.event.url) {
+                window.open(info.event.url, "_blank");
+                info.jsEvent.preventDefault();
+              }
+            },
+            events: data
+          });
+          calendar.render();
+        });
+    });
+  </script>
+</body>
+</html>

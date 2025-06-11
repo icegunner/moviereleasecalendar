@@ -1,0 +1,6 @@
+beautifulsoup4
+requests
+ics
+flask
+sqlalchemy
+psycopg2-binary

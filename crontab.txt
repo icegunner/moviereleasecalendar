@@ -1,0 +1,1 @@
+0 2 * * 0 python /app/main.py >> /app/scrape.log 2>&1
