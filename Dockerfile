@@ -9,7 +9,6 @@ WORKDIR /app
 # Copy files
 COPY app /app
 COPY crontab.txt /etc/cron.d/scraper-cron
-COPY entrypoint.sh /app/entrypoint.sh
 
 # Install Python requirements
 RUN pip install --no-cache-dir -r /app/requirements.txt && \
