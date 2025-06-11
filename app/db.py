@@ -4,7 +4,9 @@ from datetime import datetime
 import os
 
 Base = declarative_base()
-Session = sessionmaker()
+
+# Global session will be initialized in init_db()
+Session = None
 
 class Movie(Base):
     __tablename__ = "movies"
@@ -16,6 +18,8 @@ class Movie(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 def init_db():
+    global Session
+
     db_type = os.getenv("DB_TYPE", "postgres")
     user = os.getenv("DB_USER")
     pw = os.getenv("DB_PASS")
@@ -32,11 +36,8 @@ def init_db():
 
     engine = create_engine(engine_str, echo=False, future=True)
 
-    # 🔧 Required line to bind metadata to engine
-    Base.metadata.bind = engine
-
     Base.metadata.create_all(engine)
-    Session.configure(bind=engine)
+    Session = sessionmaker(bind=engine)
 
 def upsert_movie(title, release_date, description, url):
     session = Session()
