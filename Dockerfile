@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 
+# Install system packages including cron
+RUN apt-get update && apt-get install -y cron && apt-get clean
+
 WORKDIR /app
 
 COPY app /app
