@@ -31,6 +31,10 @@ def init_db():
         raise Exception("Unsupported DB_TYPE")
 
     engine = create_engine(engine_str, echo=False, future=True)
+
+    # 🔧 Required line to bind metadata to engine
+    Base.metadata.bind = engine
+
     Base.metadata.create_all(engine)
     Session.configure(bind=engine)
 
