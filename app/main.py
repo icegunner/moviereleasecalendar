@@ -3,17 +3,44 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 from db import init_db, upsert_movie, delete_removed_movies, get_all_movies
 from calendar_builder import create_ics
-from util import normalize_title
+import hashlib
+import json
+import os
 
 YEARS = [datetime.now().year - 1, datetime.now().year, datetime.now().year + 1]
 
+def hash_content(text):
+    return hashlib.md5(text.encode('utf-8')).hexdigest()
+
+def load_hashes():
+    try:
+        with open("/app/page_hashes.json", "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+def save_hashes(hashes):
+    with open("/app/page_hashes.json", "w") as f:
+        json.dump(hashes, f, indent=2)
+
 def scrape():
     seen_titles = set()
+    page_hashes = load_hashes()
+    new_hashes = {}
 
     for year in YEARS:
         url = f"https://www.firstshowing.net/schedule{year}"
         response = requests.get(url)
-        soup = BeautifulSoup(response.text, 'html.parser')
+        html = response.text
+        html_hash = hash_content(html)
+        new_hashes[str(year)] = html_hash
+
+        if page_hashes.get(str(year)) == html_hash:
+            print(f"✅ No change detected for {year}, skipping.")
+            continue
+
+        print(f"📝 Change detected for {year}, scraping...")
+        soup = BeautifulSoup(html, 'html.parser')
 
         current_month = None
         current_day = None
@@ -41,6 +68,7 @@ def scrape():
                     upsert_movie(full_title, full_date, description, full_link)
                     seen_titles.add(full_title)
 
+    save_hashes(new_hashes)
     delete_removed_movies(seen_titles)
     create_ics(get_all_movies())
 
