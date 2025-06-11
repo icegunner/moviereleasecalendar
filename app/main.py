@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 from db import init_db, upsert_movie, delete_removed_movies, get_all_movies
-from calendar import create_ics
+from calendar_builder import create_ics
 from util import normalize_title
 
 YEARS = [datetime.now().year - 1, datetime.now().year, datetime.now().year + 1]

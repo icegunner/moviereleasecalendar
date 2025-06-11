@@ -7,7 +7,7 @@ app = Flask(__name__)
 def serve_ics():
     return send_file("/app/calendar.ics", mimetype="text/calendar")
 
-@app.route("/calendar.json")
+@app.route("/calendar_build.json")
 def serve_json():
     movies = get_all_movies()
     return jsonify([
