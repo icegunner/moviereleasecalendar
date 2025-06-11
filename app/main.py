@@ -127,7 +127,7 @@ def scrape():
         previous_count = scrape_stats.get(str(year), 0)
         new_stats[str(year)] = movie_count
 
-        if movie_count == 0 or movie_count < previous_count / 2:
+        if previous_count > 0 and (movie_count == 0 or movie_count < previous_count / 2):
             warning = f"⚠️ WARNING: Only {movie_count} movies scraped for {year} (was {previous_count}). Page format may have changed."
             print(warning)
             send_pushover(config, warning)
