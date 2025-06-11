@@ -26,7 +26,7 @@ jobs:
 
     - name: Build Docker image
       run: |
-        docker build -t ghcr.io/${{ github.repository }}:latest \
+        docker build --no-cache -t ghcr.io/${{ github.repository }}:latest \
                      -t ghcr.io/${{ github.repository }}:${{ env.VERSION }} .
 
     - name: Push Docker images
