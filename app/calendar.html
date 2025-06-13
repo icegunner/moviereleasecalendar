@@ -4,8 +4,7 @@
   <meta charset='utf-8' />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Movie Release Calendar</title>
-  <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/main.min.css' rel='stylesheet' />
-  <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/main.min.js'></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.js"></script>
   <style>
     html, body {
       margin: 0;
@@ -60,11 +59,7 @@
       const toggle = document.getElementById("toggleMode");
 
       toggle.addEventListener('change', function() {
-        if (toggle.checked) {
-          body.classList.remove("light-mode");
-        } else {
-          body.classList.add("light-mode");
-        }
+        body.classList.toggle("light-mode", !toggle.checked);
       });
 
       fetch('/calendar_build.json')
@@ -79,9 +74,10 @@
               right: 'dayGridMonth,timeGridWeek'
             },
             eventDidMount: function(info) {
-              if (info.event.extendedProps.description) {
-                let tooltip = document.createElement('div');
-                tooltip.innerHTML = info.event.extendedProps.description;
+              const description = info.event.extendedProps?.description || info.event._def.extendedProps?.description || '';
+              if (description) {
+                const tooltip = document.createElement('div');
+                tooltip.innerHTML = description;
                 tooltip.style.position = 'absolute';
                 tooltip.style.background = '#222';
                 tooltip.style.color = '#fff';
@@ -92,12 +88,12 @@
                 tooltip.classList.add('fc-tooltip');
                 document.body.appendChild(tooltip);
 
-                info.el.addEventListener('mouseenter', function() {
-                  tooltip.style.left = (info.jsEvent.pageX + 10) + 'px';
-                  tooltip.style.top = (info.jsEvent.pageY + 10) + 'px';
+                info.el.addEventListener('mouseenter', (e) => {
+                  tooltip.style.left = (e.pageX + 10) + 'px';
+                  tooltip.style.top = (e.pageY + 10) + 'px';
                   tooltip.style.display = 'block';
                 });
-                info.el.addEventListener('mouseleave', function() {
+                info.el.addEventListener('mouseleave', () => {
                   tooltip.style.display = 'none';
                 });
               }
