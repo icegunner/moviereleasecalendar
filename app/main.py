@@ -3,48 +3,43 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 from db import init_db, upsert_movie, delete_removed_movies, get_all_movies
 from calendar_builder import create_ics
+from tmdb import fetch_tmdb_description_with_credits
 import hashlib
 import json
-import os
+import re
 
 YEARS = [datetime.now().year - 1, datetime.now().year, datetime.now().year + 1]
+#YEARS = [datetime.now().year]
+
+def normalize_title(title):
+    return re.sub(r"\W+", "", title.lower().strip())
+
+def generate_uid(title):
+    normalized = normalize_title(title)
+    hash_uid = hashlib.md5(normalized.encode("utf-8")).hexdigest()
+    return f"{hash_uid}@firstshowing.net"
 
 def hash_content(text):
     return hashlib.md5(text.encode("utf-8")).hexdigest()
 
-def load_hashes():
+def load_json(filepath, fallback):
     try:
-        with open("/app/page_hashes.json", "r") as f:
+        with open(filepath, "r") as f:
             return json.load(f)
     except FileNotFoundError:
-        return {}
+        return fallback
 
-def save_hashes(hashes):
-    with open("/app/page_hashes.json", "w") as f:
-        json.dump(hashes, f, indent=2)
-
-def load_scrape_stats():
-    try:
-        with open("/app/scrape_stats.json", "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-
-def save_scrape_stats(stats):
-    with open("/app/scrape_stats.json", "w") as f:
-        json.dump(stats, f, indent=2)
+def save_json(filepath, data):
+    with open(filepath, "w") as f:
+        json.dump(data, f, indent=2)
 
 def load_config():
-    try:
-        with open("/app/config.json", "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {"pushover": {"enabled": False}}
+    print("Loading configuration...")
+    return load_json("/app/config.json", {"pushover": {"enabled": False}})
 
 def send_pushover(config, message):
     if not config.get("pushover", {}).get("enabled"):
         return
-
     try:
         payload = {
             "token": config["pushover"]["app_token"],
@@ -60,26 +55,12 @@ def send_pushover(config, message):
     except Exception as e:
         print(f"⚠️ Failed to send Pushover alert: {e}")
 
-def fetch_movie_description(url):
-    try:
-        response = requests.get(url)
-        soup = BeautifulSoup(response.text, "html.parser")
-        entry = soup.find("div", class_="entry")
-        if entry:
-            first_p = entry.find("p")
-            return str(first_p) if first_p else ""
-    except Exception as e:
-        print(f"Error fetching description for {url}: {e}")
-    return ""
-
 def scrape():
     seen_titles = set()
-    page_hashes = load_hashes()
+    page_hashes = load_json("/app/page_hashes.json", {})
     new_hashes = {}
-
-    scrape_stats = load_scrape_stats()
+    scrape_stats = load_json("/app/scrape_stats.json", {})
     new_stats = {}
-
     config = load_config()
 
     for year in YEARS:
@@ -96,20 +77,15 @@ def scrape():
         print(f"📝 Change detected for {year}, scraping...")
         soup = BeautifulSoup(html, "html.parser")
 
-        current_month = None
-        current_day = None
         full_date = None
         movie_count = 0
 
-        for tag in soup.find_all(["h2", "h4", "p"]):
-            if tag.name == "h2":
-                current_month = tag.get_text(strip=True)
-            elif tag.name == "h4":
+        for tag in soup.find_all(["h4", "p"]):
+            if tag.name == "h4":
                 strong = tag.find("strong")
                 if strong:
                     try:
-                        current_day = strong.get_text(strip=True)
-                        full_date = datetime.strptime(f"{current_month} {current_day}, {year}", "%B %d, %Y")
+                        full_date = datetime.strptime(f"{strong.text.strip()}, {year}", "%B %d, %Y")
                     except Exception:
                         full_date = None
             elif tag.name == "p" and "sched" in tag.get("class", []) and full_date:
@@ -119,9 +95,10 @@ def scrape():
                     full_title = a.get_text(strip=True)
                     link = a.get("href")
                     full_link = f"https:{link}" if link.startswith("//") else link
-                    description = fetch_movie_description(full_link)
-                    upsert_movie(full_title, full_date, description, full_link)
+                    description = fetch_tmdb_description_with_credits(full_title, full_date.year) + "\nTrailer: " + full_link
                     seen_titles.add(full_title)
+                    print(f"📅 Found movie: {full_title} on {full_date.strftime('%Y-%m-%d')}")
+                    upsert_movie(full_title, full_date, description, full_link)
                     movie_count += 1
 
         previous_count = scrape_stats.get(str(year), 0)
@@ -132,8 +109,8 @@ def scrape():
             print(warning)
             send_pushover(config, warning)
 
-    save_hashes(new_hashes)
-    save_scrape_stats(new_stats)
+    save_json("/app/page_hashes.json", new_hashes)
+    save_json("/app/scrape_stats.json", new_stats)
     delete_removed_movies(seen_titles)
     create_ics(get_all_movies())
 
