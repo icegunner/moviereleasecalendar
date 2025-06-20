@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎬 Movie Release Calendar</title>
+
+  <!-- FullCalendar JS -->
+  <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.js'></script>
+</head>
+<body>
+  <h1>🎬 Movie Release Calendar</h1>
+  <div id="calendar"></div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const calendarEl = document.getElementById('calendar');
+
+      const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        height: 'auto',
+        events: '/api/calendar/events.json',
+        eventClick: function(info) {
+          if (info.event.url) {
+            window.open(info.event.url, '_blank');
+            info.jsEvent.preventDefault();
+          }
+        },
+        eventDidMount: function(info) {
+          info.el.title = info.event.extendedProps.description || '';
+        }
+      });
+
+      calendar.render();
+    });
+  </script>
+</body>
+</html>
