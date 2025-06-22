@@ -9,9 +9,9 @@ namespace MovieCalendar.API.Models
         public string Title { get; set; } = string.Empty;
         public DateTime ReleaseDate { get; set; }
         public string Url { get; set; } = string.Empty;
-        public string? Description { get; set; }
-        public List<string>? Genres { get; set; }
-        public string? PosterUrl { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public List<string> Genres { get; set; } = new List<string>();
+        public string PosterUrl { get; set; } = string.Empty;
         public DateTimeOffset ScrapedAt { get; set; } = DateTimeOffset.UtcNow;
     }
 }
