@@ -20,7 +20,7 @@ namespace MovieCalendar.API.Services
     {
         private readonly IDocumentStore _store;
         private readonly ILogger<ScraperService> _logger;
-        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly HttpClient _client;
         private readonly string _tmdbApiKey;
 
         private static readonly int[] YEARS = [DateTime.UtcNow.Year - 1, DateTime.UtcNow.Year, DateTime.UtcNow.Year + 1];
@@ -29,18 +29,27 @@ namespace MovieCalendar.API.Services
         {
             _store = store;
             _logger = logger;
-            _httpClientFactory = httpClientFactory;
-            _tmdbApiKey = configuration["TMDb:ApiKey"] ?? string.Empty;
+            _client = httpClientFactory.CreateClient();
+            _tmdbApiKey = Environment.GetEnvironmentVariable("TMDB_APIKEY") ?? configuration["TMDb:ApiKey"];
         }
 
         public async Task<List<Movie>> ScrapeAsync()
         {
-            var client = _httpClientFactory.CreateClient();
             var results = new List<Movie>();
             var seen = new HashSet<string>();
+            var genreList = new List<TmDbGenre>();
 
-            var genreResponse = MakeApiCall<TmDbGenreResponse>(client, _tmdbApiKey, "https://api.themoviedb.org/3/genre/movie/list?language=en").Result;
-            var genreList = genreResponse.Result.Genres;
+            if (string.IsNullOrEmpty(_tmdbApiKey))
+            {
+                _logger.LogWarning("TMDb API key is not configured.");
+                return results;
+            }
+            else
+            {
+                var genreResponse = MakeApiCall<TmDbGenreResponse>("https://api.themoviedb.org/3/genre/movie/list?language=en").Result;
+                genreList = genreResponse.Result.Genres;
+                _logger.LogDebug($"Loaded {genreList.Count} genres from TMDb.");
+            }
 
             using var session = _store.OpenAsyncSession();
 
@@ -52,11 +61,11 @@ namespace MovieCalendar.API.Services
                 string html;
                 try
                 {
-                    html = client.GetStringAsync(url).Result;
+                    html = _client.GetStringAsync(url).Result;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError($"Failed to download year {year}");
+                    _logger.LogError(ex, $"Failed to download year {year}");
                     continue;
                 }
 
@@ -68,6 +77,8 @@ namespace MovieCalendar.API.Services
 
                 if (tags == null) continue;
 
+                _logger.LogTrace($"Traversing HTML nodes for year {year}.");
+                _logger.LogTrace($"Found {tags.Count(s => s.Name == "h4")} \"h4\" and {tags.Count(s => s.Name == "p" && s.GetClasses().Contains("sched"))} \"p\" tags.");
                 foreach (var tag in tags)
                 {
                     if (tag.Name == "h4")
@@ -123,9 +134,9 @@ namespace MovieCalendar.API.Services
                             var link = firstA.GetAttributeValue("href", string.Empty).Trim();
                             var key = $"{title}|{currentDate:yyyy-MM-dd}";
 
-							if (!seen.Add(key)) continue;
+                            if (!seen.Add(key)) continue;
 
-							var existing = await session.Query<Movie>()
+                            var existing = await session.Query<Movie>()
                                 .Where(m => m.Title == title && m.ReleaseDate == currentDate)
                                 .FirstOrDefaultAsync();
 
@@ -135,31 +146,59 @@ namespace MovieCalendar.API.Services
                                 var genres = new List<string>();
                                 var tmdbMovie = new TmDbMovie();
 
-                                try
+                                if (!string.IsNullOrEmpty(_tmdbApiKey))
                                 {
-                                    var tmdbUrl = $"https://api.themoviedb.org/3/search/movie?query={Uri.EscapeDataString(cleanTitle)}&year={currentDate.Value.Year}";
-                                    var tmdbResponse = await MakeApiCall<TmDbResponse>(client, _tmdbApiKey, tmdbUrl);
-
-                                    if (tmdbResponse.Result.TotalResults == 0)
+                                    try
                                     {
-                                        var baseTitle = Regex.Replace(cleanTitle, @"\s*[:\-]\s*.*$", "");
-                                        _logger.LogDebug($"Failed to lookup {cleanTitle}. Trying {baseTitle} instead.");
-                                        tmdbUrl = $"https://api.themoviedb.org/3/search/movie?query={Uri.EscapeDataString(baseTitle)}&year={currentDate.Value.Year}";
-                                        tmdbResponse = await MakeApiCall<TmDbResponse>(client, _tmdbApiKey, tmdbUrl);
-                                        if (tmdbResponse.Result.TotalResults > 0)
+                                        var tmdbUrl = $"https://api.themoviedb.org/3/search/movie?query={Uri.EscapeDataString(cleanTitle)}&year={currentDate.Value.Year}";
+                                        var tmdbResponse = await MakeApiCall<TmDbResponse>(tmdbUrl);
+
+                                        if (tmdbResponse.Result.TotalResults == 0)
                                         {
-                                            _logger.LogDebug($"Found {baseTitle}.");
+                                            var baseTitle = Regex.Replace(cleanTitle, @"\s*[:\-]\s*.*$", "");
+                                            if (baseTitle == cleanTitle)
+                                            {
+                                                baseTitle = Regex.Replace(cleanTitle, @"(\b[\p{L}\p{M}\p{N}\.]+(?:\s+[\p{L}\p{M}\p{N}\.]+)*'s?\s+)|(&#\d+;)|(\s*[:\-]\s*.*$)", "").TrimEnd();
+                                            }
+                                            if (baseTitle != cleanTitle)
+                                            {
+                                                _logger.LogDebug($"Failed to lookup {cleanTitle}. Trying {baseTitle} instead.");
+                                                tmdbUrl = $"https://api.themoviedb.org/3/search/movie?query={Uri.EscapeDataString(baseTitle)}&year={currentDate.Value.Year}";
+                                                tmdbResponse = await MakeApiCall<TmDbResponse>(tmdbUrl);
+                                                if (tmdbResponse.Result.TotalResults > 0)
+                                                {
+                                                    _logger.LogDebug($"Found {baseTitle}.");
+                                                }
+                                                else
+                                                {
+                                                    var superCleanTitle = Regex.Replace(cleanTitle, @"(\b[\p{L}\p{M}\p{N}\.]+(?:\s+[\p{L}\p{M}\p{N}\.]+)*'s?\s+)|(&#\d+;)|(\s*[:\-]\s*.*$)", "").TrimEnd();
+                                                    if (superCleanTitle != baseTitle)
+                                                    {
+                                                        _logger.LogDebug($"Failed to lookup {baseTitle}. Trying {superCleanTitle} instead.");
+                                                        tmdbUrl = $"https://api.themoviedb.org/3/search/movie?query={Uri.EscapeDataString(superCleanTitle)}&year={currentDate.Value.Year}";
+                                                        tmdbResponse = MakeApiCall<TmDbResponse>(tmdbUrl).Result;
+                                                        if (tmdbResponse.Result.TotalResults > 0)
+                                                        {
+                                                            _logger.LogDebug($"Found {superCleanTitle}.");
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
+
+                                        tmdbMovie = tmdbResponse.Result.Movies.First();
+
+                                        description = tmdbMovie.Overview;
+                                        genres = genreList.Where(s => tmdbMovie.GenreIds.Contains(s.Id)).Select(s => s.Name).ToList();
                                     }
-
-                                    tmdbMovie = tmdbResponse.Result.Movies.First();
-
-                                    description = tmdbMovie.Overview;
-                                    genres = genreList.Where(s => tmdbMovie.GenreIds.Contains(s.Id)).Select(s => s.Name).ToList();
+                                    catch (Exception ex)
+                                    {
+                                        _logger.LogWarning(ex, $"TMDb lookup failed for: {title}");
+                                    }
                                 }
-                                catch (Exception ex)
+                                else
                                 {
-                                    _logger.LogWarning($"TMDb lookup failed for: {title}");
+                                    _logger.LogDebug("TMDb API key is not configured, skipping TMDb lookup.");
                                 }
 
                                 var movie = new Movie
@@ -185,21 +224,20 @@ namespace MovieCalendar.API.Services
             return results;
         }
 
-        private async Task<(T Result, HttpResponseMessage Response)> MakeApiCall<T>(HttpClient client, string apiToken, string requestUri, AuthenticationHeaderValue authHeader = null, HttpMethod method = null, HttpContent content = null, bool includeResponse = false)
+        private async Task<(T Result, HttpResponseMessage Response)> MakeApiCall<T>(string requestUri, AuthenticationHeaderValue authHeader = null, HttpMethod method = null, HttpContent content = null, bool includeResponse = false)
         {
             method ??= HttpMethod.Get;
-            authHeader ??= new AuthenticationHeaderValue("Bearer", apiToken);
+            authHeader ??= new AuthenticationHeaderValue("Bearer", _tmdbApiKey);
 
             var request = new HttpRequestMessage(method, requestUri);
             if (content != null)
                 request.Content = content;
 
             request.Headers.Authorization = authHeader;
-            HttpResponseMessage response = null;
-
+            HttpResponseMessage response;
             try
             {
-                response = await client.SendAsync(request);
+                response = await _client.SendAsync(request);
             }
             catch (HttpRequestException ex)
             {
@@ -215,12 +253,6 @@ namespace MovieCalendar.API.Services
 
             var contentToDeserialize = await response.Content.ReadAsStringAsync();
 
-            if (typeof(T) == typeof(string))
-            {
-                // Cast to object and then to T to satisfy the return type
-                return ((T)(object)contentToDeserialize, includeResponse ? response : null);
-            }
-
             try
             {
                 var result = JsonConvert.DeserializeObject<T>(contentToDeserialize);
@@ -228,7 +260,7 @@ namespace MovieCalendar.API.Services
             }
             catch (JsonException ex)
             {
-                _logger.LogError($"Failed to deserialize response body into {typeof(T).Name}.\nRequest URI: {requestUri}\nRaw response:\n{contentToDeserialize}");
+                _logger.LogError(ex, $"Failed to deserialize response body into {typeof(T).Name}.\nRequest URI: {requestUri}\nRaw response:\n{contentToDeserialize}");
                 return (default, includeResponse ? response : null);
             }
         }
