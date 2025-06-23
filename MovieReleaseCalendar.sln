@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MovieCalendar.API", "MovieCalendar.API\MovieCalendar.API.csproj", "{FBA99FEE-0776-4850-938B-F18A288F54BB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MovieReleaseCalendar.API", "MovieCalendar.API\MovieReleaseCalendar.API.csproj", "{FBA99FEE-0776-4850-938B-F18A288F54BB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
