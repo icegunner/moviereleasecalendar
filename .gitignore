@@ -482,3 +482,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Ignore Debug configuration files
+docker-compose.debug.yml
+appsettings.Debug.json
