@@ -2,7 +2,7 @@ using System.Threading.Tasks;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Session;
 
-namespace MovieCalendar.API.Data
+namespace MovieReleaseCalendar.API.Data
 {
     public class RavenDbDocumentStore
     {

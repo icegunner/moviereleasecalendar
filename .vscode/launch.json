@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "C#: MovieReleaseCalendar.API Debug",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/MovieReleaseCalendar.API/bin/Debug/net8.0/MovieReleaseCalendar.API.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/MovieReleaseCalendar.API",
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": ".NET Core Docker Attach",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "1",
+            "pipeTransport": {
+                "pipeProgram": "docker",
+                "pipeArgs": ["exec", "-i", "${env:CONTAINER_ID}"],
+                "debuggerPath": "/usr/share/dotnet/dotnet"
+            },
+            "justMyCode": false
+        }
+    ]
+}

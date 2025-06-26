@@ -8,6 +8,8 @@ services:
     environment:
       RAVEN_Setup_Mode: None
       RAVEN_Security_UnsecuredAccessAllowed: PublicNetwork
+      RAVEN_ARGS: --log-to-console
+      RAVEN_Logs.UseUtcTime: false
     volumes:
       - ravendb-data:/opt/RavenDB/Server/RavenData
 

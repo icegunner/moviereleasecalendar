@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace MovieCalendar.API.Models
+namespace MovieReleaseCalendar.API.Models
 {
     public class TmDbResponse
     {

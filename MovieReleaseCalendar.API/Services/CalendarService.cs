@@ -2,16 +2,16 @@ using Ical.Net.CalendarComponents;
 using Ical.Net.DataTypes;
 using Ical.Net.Serialization;
 using Microsoft.Extensions.Logging;
-using MovieCalendar.API.Models;
+using MovieReleaseCalendar.API.Models;
 using Raven.Client.Documents;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace MovieCalendar.API.Services
+namespace MovieReleaseCalendar.API.Services
 {
-    public class CalendarService
+    public class CalendarService : ICalendarService
     {
         private readonly IDocumentStore _store;
         private readonly ILogger<CalendarService> _logger;

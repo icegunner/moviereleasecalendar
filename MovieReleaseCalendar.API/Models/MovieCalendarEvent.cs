@@ -1,6 +1,6 @@
 using System;
 
-namespace MovieCalendar.API.Models
+namespace MovieReleaseCalendar.API.Models
 {
     public class MovieCalendarEvent
     {

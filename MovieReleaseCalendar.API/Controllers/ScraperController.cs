@@ -3,19 +3,19 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using MovieCalendar.API.Models;
-using MovieCalendar.API.Services;
+using MovieReleaseCalendar.API.Models;
+using MovieReleaseCalendar.API.Services;
 
-namespace MovieCalendar.API.Controllers
+namespace MovieReleaseCalendar.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
     public class ScraperController : ControllerBase
     {
-        private readonly ScraperService _scraperService;
+        private readonly IScraperService _scraperService;
         private readonly ILogger<ScraperController> _logger;
 
-        public ScraperController(ScraperService scraperService, ILogger<ScraperController> logger)
+        public ScraperController(IScraperService scraperService, ILogger<ScraperController> logger)
         {
             _scraperService = scraperService;
             _logger = logger;

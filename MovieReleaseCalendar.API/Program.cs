@@ -1,33 +1,39 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using MovieCalendar.API.Data;
-using MovieCalendar.API.Services;
-using MovieCalendar.API.Background;
 using Raven.Client.Documents;
-using MovieCalendar.API.Models;
 using System.Threading.Tasks;
 using Raven.Client.Documents.Conventions;
 using NLog.Web;
 using NLog;
 using System;
+using MovieReleaseCalendar.API.Background;
+using MovieReleaseCalendar.API.Data;
+using MovieReleaseCalendar.API.Models;
+using MovieReleaseCalendar.API.Services;
+using System.Diagnostics;
 
-internal class Program
+public class Program
 {
-    private static void Main(string[] args)
+    public static void Main(string[] args)
     {
         // Setup NLog for Dependency injection and configuration from appsettings.json
-        LogManager.Setup().LoadConfigurationFromAppSettings();
+        //LogManager.Setup().LoadConfigurationFromAppSettings();
         var logger = LogManager.GetCurrentClassLogger();
         try
         {
             var builder = WebApplication.CreateBuilder(args);
 
+#if DEBUG
+            builder.Configuration
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .AddJsonFile("appsettings.Debug.json", optional: true, reloadOnChange: true);
+#else
+            builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+#endif
+
             // Add NLog to ASP.NET Core
             builder.Host.UseNLog();
-
-            // Load configuration from appsettings.json
-            builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
 
             // Register RavenDB Document Store
             builder.Services
@@ -53,10 +59,11 @@ internal class Program
 
                 // Register services
                 .AddScoped<RavenDbDocumentStore>()
-                .AddScoped<ScraperService>()
-                .AddScoped<CalendarService>()
+                .AddScoped<ICalendarService, CalendarService>()
+                .AddScoped<IScraperService, ScraperService>()
                 .AddHttpClient()
                 .AddHostedService<ScrapingWorker>()
+                .AddHostedService<StartupSeeder>()
 
                 // Add controllers and static files
                 .AddEndpointsApiExplorer()

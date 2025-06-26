@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace MovieCalendar.API.Models
+namespace MovieReleaseCalendar.API.Models
 {
     public class TmDbGenreResponse
     {
@@ -11,7 +11,9 @@ namespace MovieCalendar.API.Models
 
     public class TmDbGenre
     {
+        [JsonProperty("id")]
         public int Id { get; set; }
+        [JsonProperty("name")]
         public string Name { get; set; } = string.Empty;
     }
 

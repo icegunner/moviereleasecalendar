@@ -2,13 +2,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using MovieCalendar.API.Services;
+using MovieReleaseCalendar.API.Services;
 using NCrontab;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace MovieCalendar.API.Background
+namespace MovieReleaseCalendar.API.Background
 {
     public class ScrapingWorker : BackgroundService
     {
@@ -38,6 +38,7 @@ namespace MovieCalendar.API.Background
             }
             else
             {
+                _logger.LogInformation("Using cron from configuration file.");
                 var scrapingSection = _configuration.GetSection("Scraping");
                 _cronExpression = scrapingSection["Cron"] ?? "0 0 * * 0"; // Default: every Sunday at 12am
             }
