@@ -25,7 +25,7 @@ namespace MovieReleaseCalendar.Tests
 
         string FirstCharToLower(string str) => $"{char.ToLower(str[0])}{str.Substring(1)}";
 
-        public ScraperServiceTests()
+        static ScraperServiceTests()
         {
             ConfigureServer(new TestServerOptions
             {
