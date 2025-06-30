@@ -45,6 +45,34 @@ namespace MovieReleaseCalendar.API.Services
 			.ToList();
         }
 
+        public async Task<List<MovieCalendarEvent>> GetCalendarEventsAsync(DateTime? start, DateTime? end)
+        {
+            using var session = _store.OpenAsyncSession();
+
+            DateTime defaultStart = DateTime.Today.AddYears(-1);
+            DateTime defaultEnd = DateTime.Today.AddYears(2);
+            var queryStart = start ?? defaultStart;
+            var queryEnd = end ?? defaultEnd;
+
+            var movies = await session
+                .Query<Movie>()
+                .Where(m => m.ReleaseDate >= queryStart && m.ReleaseDate <= queryEnd)
+                .OrderBy(m => m.ReleaseDate)
+                .ToListAsync();
+
+            return movies.Select(movie =>
+                new MovieCalendarEvent
+                {
+                    Title = $"🎬 {movie.Title}",
+                    Date = movie.ReleaseDate.Date,
+                    Url = movie.Url,
+                    Description = movie.Description,
+                    AllDay = true
+                }
+            )
+            .ToList();
+        }
+
         public async Task<string> GenerateIcsFeedAsync()
         {
             var calendar = new Ical.Net.Calendar();
