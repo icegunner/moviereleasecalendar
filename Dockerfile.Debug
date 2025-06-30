@@ -11,7 +11,7 @@ COPY ["MovieReleaseCalendar.API/MovieReleaseCalendar.API.csproj", "MovieReleaseC
 RUN dotnet restore "MovieReleaseCalendar.API/MovieReleaseCalendar.API.csproj"
 COPY . .
 WORKDIR "/src/MovieReleaseCalendar.API"
-RUN dotnet publish "MovieReleaseCalendar.API.csproj" -c Release -o /app/publish
+RUN dotnet publish "MovieReleaseCalendar.API.csproj" -c Debug -o /app/publish
 
 # Final stage
 FROM base AS final
