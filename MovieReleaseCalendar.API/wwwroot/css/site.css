@@ -1,53 +1,39 @@
-/* Base styles */
-body {
+html, body {
   margin: 0;
-  padding: 2rem;
-  font-family: system-ui, sans-serif;
-  background-color: #f9fafb;
-  color: #111;
+  padding: 0;
+  height: 100%;
+  font-family: Arial, sans-serif;
+  background-color: #121212;
+  color: #ffffff;
 }
-
-h1 {
-  text-align: center;
-  font-size: 2rem;
-  margin-bottom: 2rem;
-}
-
-/* Center the calendar */
 #calendar {
-  max-width: 1000px;
-  margin: 0 auto;
-  background: white;
-  padding: 1rem;
-  border-radius: 1rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  height: 95%;
 }
-
-/* Event styling (optional) */
-.fc-event-title {
-  font-weight: 600;
-  font-size: 0.9rem;
-  padding: 2px 4px;
+.toolbar {
+  padding: 10px;
+  background-color: #1e1e1e;
+  color: white;
+  text-align: right;
 }
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: #1e1e1e;
-    color: #eee;
-  }
-
-  #calendar {
-    background: #2a2a2a;
-    color: #eee;
-  }
-
-  .fc-event {
-    background-color: #444;
-    color: white;
-  }
-
-  .fc-toolbar-title {
-    color: #eee;
-  }
+.fc-theme-standard .fc-scrollgrid {
+  border-color: #444;
+}
+.fc-daygrid-event {
+  background-color: #333;
+  color: #fff;
+}
+.light-mode {
+  background-color: #ffffff;
+  color: #000000;
+}
+.light-mode .fc-daygrid-event {
+  background-color: #e0e0e0;
+  color: #000000;
+}
+.light-mode .toolbar {
+  background-color: #f0f0f0;
+  color: #000000;
+}
+.light-mode .fc-theme-standard .fc-scrollgrid {
+  border-color: #ccc;
 }

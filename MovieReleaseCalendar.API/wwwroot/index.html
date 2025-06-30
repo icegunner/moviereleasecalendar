@@ -1,38 +1,86 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>🎬 Movie Release Calendar</title>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>🎬 Movie Release Calendar</title>
 
-  <!-- FullCalendar JS -->
-  <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.js'></script>
-</head>
-<body>
-  <h1>🎬 Movie Release Calendar</h1>
-  <div id="calendar"></div>
+        <!-- FullCalendar JS -->
+        <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.js"></script>
+    </head>
+    <body>
+        <h1>🎬 Movie Release Calendar</h1>
+        <div class="toolbar">
+            <label
+                ><input type="checkbox" id="toggleMode" checked /> Dark
+                Mode</label
+            >
+        </div>
+        <div id="calendar"></div>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      const calendarEl = document.getElementById('calendar');
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const body = document.body;
+                const toggle = document.getElementById("toggleMode");
+                const calendarEl = document.getElementById("calendar");
 
-      const calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
-        height: 'auto',
-        events: '/api/calendar/events.json',
-        eventClick: function(info) {
-          if (info.event.url) {
-            window.open(info.event.url, '_blank');
-            info.jsEvent.preventDefault();
-          }
-        },
-        eventDidMount: function(info) {
-          info.el.title = info.event.extendedProps.description || '';
-        }
-      });
+                toggle.addEventListener("change", function () {
+                    body.classList.toggle("light-mode", !toggle.checked);
+                });
 
-      calendar.render();
-    });
-  </script>
-</body>
+                const calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: "dayGridMonth",
+                    headerToolbar: {
+                        left: "prev,next today",
+                        center: "title",
+                        right: "dayGridYear,dayGridMonth,dayGridWeek",
+                    },
+                    height: "auto",
+                    events: "/api/calendar/events.json",
+                    eventClick: function (info) {
+                        if (info.event.url) {
+                            window.open(info.event.url, "_blank");
+                            info.jsEvent.preventDefault();
+                        }
+                    },
+                    eventDidMount: function (info) {
+                        const description =
+                            info.event.extendedProps?.description ||
+                            info.event._def.extendedProps?.description ||
+                            "";
+                        if (description) {
+                            const tooltip = document.createElement("div");
+                            tooltip.innerHTML = description;
+                            tooltip.style.position = "absolute";
+                            tooltip.style.background = "#222";
+                            tooltip.style.color = "#fff";
+                            tooltip.style.padding = "8px";
+                            tooltip.style.borderRadius = "4px";
+                            tooltip.style.zIndex = 1000;
+                            tooltip.style.display = "none";
+                            tooltip.classList.add("fc-tooltip");
+                            document.body.appendChild(tooltip);
+
+                            info.el.addEventListener("mouseenter", (e) => {
+                                tooltip.style.left = e.pageX + 10 + "px";
+                                tooltip.style.top = e.pageY + 10 + "px";
+                                tooltip.style.display = "block";
+                            });
+                            info.el.addEventListener("mouseleave", () => {
+                                tooltip.style.display = "none";
+                            });
+                        }
+                    },
+                    eventClick: function (info) {
+                        if (info.event.url) {
+                            window.open(info.event.url, "_blank");
+                            info.jsEvent.preventDefault();
+                        }
+                    },
+                    events: data
+                });
+                calendar.render();
+            });
+        </script>
+    </body>
 </html>
