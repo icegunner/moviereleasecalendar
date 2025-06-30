@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System;
+using Raven.Embedded;
 
 namespace MovieReleaseCalendar.Tests
 {
@@ -21,6 +22,14 @@ namespace MovieReleaseCalendar.Tests
 
         private ScraperService CreateService(IDocumentStore store, HttpClient httpClient = null, string apiKey = "fake-key")
         {
+            ConfigureServer(new TestServerOptions
+            {
+                Licensing = new ServerOptions.LicensingOptions
+                {
+                    ThrowOnInvalidOrMissingLicense = false
+                }
+            });
+
             _httpClientFactoryMock.Reset();
             _configurationMock.Reset();
             _configurationMock.Setup(c => c["TMDb:ApiKey"]).Returns(apiKey);
