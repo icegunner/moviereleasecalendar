@@ -41,7 +41,7 @@ namespace MovieReleaseCalendar.API.Controllers
             }
         }
 
-        [HttpGet("calendar.ics")]
+        [HttpGet("/calendar.ics")]
         public async Task<IActionResult> GetIcsCalendar()
         {
             try

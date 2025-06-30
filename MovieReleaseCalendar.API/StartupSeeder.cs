@@ -48,6 +48,9 @@ public class StartupSeeder : IHostedService
         {
             _logger.LogInformation("StartupSeeder: Movies already exist. Skipping seeding.");
         }
+
+        _logger.LogInformation("StartupSeeder: Seeding completed.");
+        _logger.LogInformation("Ready to accept requests.");
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

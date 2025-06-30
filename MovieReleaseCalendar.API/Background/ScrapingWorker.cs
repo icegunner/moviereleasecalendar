@@ -44,6 +44,7 @@ namespace MovieReleaseCalendar.API.Background
             }
             _cronSchedule = CrontabSchedule.Parse(_cronExpression);
             _nextRun = _cronSchedule.GetNextOccurrence(DateTime.UtcNow);
+            _logger.LogInformation($"Next scrape scheduled for {_nextRun:u} using cron expression: {_cronExpression}");
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
