@@ -28,6 +28,10 @@
                 justify-content: center;
                 z-index: 1001;
             }
+            .modal-btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
         </style>
     </head>
     <body>
@@ -41,9 +45,25 @@
         </div>
         <div id="modalConfirm" class="modal-confirm" style="display: none">
             <div class="modal-content">
-                <p>Are you sure you want to run the scraper?</p>
-                <button id="modalYes" class="modal-btn modal-yes">Yes</button>
-                <button id="modalNo" class="modal-btn modal-no">No</button>
+                <div id="modalStepConfirm">
+                    <p>Are you sure you want to run the scraper?</p>
+                    <button id="modalYes" class="modal-btn modal-yes">Yes</button>
+                    <button id="modalNo" class="modal-btn modal-no">No</button>
+                </div>
+                <div id="modalStepYears" style="display:none;">
+                    <p>Select year(s) to run the scraper for:</p>
+                    <div id="yearCheckboxes" style="display:flex; gap:18px; justify-content:center; margin-bottom:12px;"></div>
+                    <button id="modalRun" class="modal-btn modal-yes" disabled>Run</button>
+                    <button id="modalCancel" class="modal-btn modal-no">Cancel</button>
+                </div>
+            </div>
+        </div>
+        <div id="modalMessage" class="modal-confirm" style="display: none">
+            <div class="modal-content">
+                <p id="modalMessageText"></p>
+                <button id="modalToggleList" class="modal-btn" style="display:none; margin-bottom:10px;">Show Imported Movies ▼</button>
+                <ul id="modalMovieList" style="display:none; max-height:220px; overflow:auto; text-align:left; margin:0 auto 10px auto; padding-left:1.5em;"></ul>
+                <button id="modalMessageOk" class="modal-btn modal-yes">Okay</button>
             </div>
         </div>
         <div id="calendar"></div>
@@ -58,6 +78,16 @@
                 const modal = document.getElementById("modalConfirm");
                 const modalYes = document.getElementById("modalYes");
                 const modalNo = document.getElementById("modalNo");
+                const modalStepConfirm = document.getElementById("modalStepConfirm");
+                const modalStepYears = document.getElementById("modalStepYears");
+                const yearCheckboxes = document.getElementById("yearCheckboxes");
+                const modalRun = document.getElementById("modalRun");
+                const modalCancel = document.getElementById("modalCancel");
+                const modalMessage = document.getElementById("modalMessage");
+                const modalMessageText = document.getElementById("modalMessageText");
+                const modalMessageOk = document.getElementById("modalMessageOk");
+                const modalToggleList = document.getElementById("modalToggleList");
+                const modalMovieList = document.getElementById("modalMovieList");
 
                 toggle.addEventListener("change", function () {
                     body.classList.toggle("light-mode", !toggle.checked);
@@ -164,25 +194,103 @@
 
                 runScraperBtn.addEventListener("click", function () {
                     modal.style.display = "flex";
+                    modalStepConfirm.style.display = "block";
+                    modalStepYears.style.display = "none";
                 });
                 modalNo.addEventListener("click", function () {
                     modal.style.display = "none";
                 });
-                modalYes.addEventListener("click", async function () {
+                modalYes.addEventListener("click", function () {
+                    // Show year selection step
+                    modalStepConfirm.style.display = "none";
+                    modalStepYears.style.display = "block";
+                    // Populate year checkboxes
+                    yearCheckboxes.innerHTML = "";
+                    const now = new Date();
+                    const years = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1];
+                    years.forEach(y => {
+                        const label = document.createElement("label");
+                        label.style.display = "flex";
+                        label.style.alignItems = "center";
+                        label.style.gap = "6px";
+                        const cb = document.createElement("input");
+                        cb.type = "checkbox";
+                        cb.value = y;
+                        cb.className = "year-checkbox";
+                        label.appendChild(cb);
+                        label.appendChild(document.createTextNode(y));
+                        yearCheckboxes.appendChild(label);
+                    });
+                    // Enable Run button only if at least one year is selected
+                    const updateRunBtn = () => {
+                        const checked = yearCheckboxes.querySelectorAll("input[type='checkbox']:checked");
+                        modalRun.disabled = checked.length === 0;
+                    };
+                    // Use event delegation for robustness
+                    yearCheckboxes.addEventListener("change", updateRunBtn);
+                    updateRunBtn(); // Ensure correct state on open
+                });
+                modalCancel.addEventListener("click", function () {
+                    modal.style.display = "none";
+                });
+                function showMessageModal(msg, movies) {
+                    modalMessageText.textContent = msg;
+                    if (Array.isArray(movies) && movies.length > 0) {
+                        movies.sort((a, b) => new Date(a.releaseDate) - new Date(b.releaseDate));
+                        modalToggleList.style.display = "inline-block";
+                        modalMovieList.style.display = "none";
+                        modalToggleList.textContent = "Show Imported Movies ▼";
+                        // Format releaseDate as MM-dd-yyyy
+                        modalMovieList.innerHTML = movies.map(m => {
+                            const d = new Date(m.releaseDate);
+                            const mm = String(d.getMonth() + 1).padStart(2, '0');
+                            const dd = String(d.getDate()).padStart(2, '0');
+                            const yyyy = d.getFullYear();
+                            return `<li>${m.title} <i>(${mm}-${dd}-${yyyy})</i></li>`;
+                        }).join("");
+                    } else {
+                        modalToggleList.style.display = "none";
+                        modalMovieList.style.display = "none";
+                        modalMovieList.innerHTML = "";
+                    }
+                    modalMessage.style.display = "flex";
+                }
+                modalToggleList.addEventListener("click", function () {
+                    if (modalMovieList.style.display === "none") {
+                        modalMovieList.style.display = "block";
+                        modalToggleList.textContent = "Hide Imported Movies ▲";
+                    } else {
+                        modalMovieList.style.display = "none";
+                        modalToggleList.textContent = "Show Imported Movies ▼";
+                    }
+                });
+                modalMessageOk.addEventListener("click", function () {
+                    modalMessage.style.display = "none";
+                });
+                modalRun.addEventListener("click", async function () {
+                    const selectedYears = Array.from(yearCheckboxes.querySelectorAll("input:checked")).map(cb => parseInt(cb.value));
+                    if (selectedYears.length === 0) return;
                     modal.style.display = "none";
                     try {
                         runScraperBtn.disabled = true;
                         runScraperBtn.textContent = "Running...";
                         const resp = await fetch("/api/scraper/run", {
                             method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ years: selectedYears })
                         });
                         if (resp.ok) {
-                            alert("Scraper started successfully.");
+                            const data = await resp.json();
+                            if (data.imported === 0) {
+                                showMessageModal("No new movies were imported.");
+                                return;
+                            }
+                            showMessageModal(`Scraper completed successfully. Imported: ${data.imported}`, data.movies || []);
                         } else {
-                            alert("Failed to start scraper.");
+                            showMessageModal("Failed to start scraper.");
                         }
                     } catch {
-                        alert("Error contacting server.");
+                        showMessageModal("Error contacting server.");
                     } finally {
                         runScraperBtn.disabled = false;
                         runScraperBtn.textContent = "Run Scraper";
@@ -192,6 +300,12 @@
                 modal.addEventListener("click", function (e) {
                     if (!e.target.closest('.modal-content')) {
                         modal.style.display = "none";
+                    }
+                });
+                // Allow closing message modal by clicking outside modal-content
+                modalMessage.addEventListener("click", function (e) {
+                    if (!e.target.closest('.modal-content')) {
+                        modalMessage.style.display = "none";
                     }
                 });
             });
