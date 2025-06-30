@@ -20,7 +20,7 @@ namespace MovieReleaseCalendar.API.Controllers
         }
 
         [HttpGet("events.json")]
-        public async Task<IActionResult> GetJsonEvents([FromQuery] string? start, [FromQuery] string? end)
+        public async Task<IActionResult> GetJsonEvents([FromQuery] string start, [FromQuery] string end)
         {
             try
             {

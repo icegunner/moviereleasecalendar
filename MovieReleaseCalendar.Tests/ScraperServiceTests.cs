@@ -5,6 +5,11 @@ using Raven.Client.Documents;
 using Raven.TestDriver;
 using MovieReleaseCalendar.API.Models;
 using MovieReleaseCalendar.API.Services;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Threading;
+using System;
 
 namespace MovieReleaseCalendar.Tests
 {
@@ -14,7 +19,7 @@ namespace MovieReleaseCalendar.Tests
         private readonly Mock<IHttpClientFactory> _httpClientFactoryMock = new();
         private readonly Mock<IConfiguration> _configurationMock = new();
 
-        private ScraperService CreateService(IDocumentStore store, HttpClient? httpClient = null, string? apiKey = "fake-key")
+        private ScraperService CreateService(IDocumentStore store, HttpClient httpClient = null, string apiKey = "fake-key")
         {
             _httpClientFactoryMock.Reset();
             _configurationMock.Reset();
@@ -56,7 +61,7 @@ namespace MovieReleaseCalendar.Tests
                 It.IsAny<EventId>(),
                 It.Is<It.IsAnyType>((v, t) => v != null && v.ToString() != null && v.ToString().Contains("TMDb API key is not configured.")),
 				null,
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
+                It.IsAny<Func<It.IsAnyType, Exception, string>>()), Times.Once);
         }
 
         [Fact]
@@ -174,7 +179,7 @@ namespace MovieReleaseCalendar.Tests
             public virtual new Task UpdateExistingMovieAsync(Movie movie, string cleanTitle, DateTime releaseDate, string fullLink) => base.UpdateExistingMovieAsync(movie, cleanTitle, releaseDate, fullLink);
         }
 
-        private TestableScraperService CreateTestableService(IDocumentStore store, HttpClient? httpClient = null, string? apiKey = "fake-key")
+        private TestableScraperService CreateTestableService(IDocumentStore store, HttpClient httpClient = null, string apiKey = "fake-key")
         {
             _httpClientFactoryMock.Reset();
             _configurationMock.Reset();
