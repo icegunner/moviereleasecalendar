@@ -1,0 +1,26 @@
+name: .NET Debug Build and Test
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore MovieReleaseCalendar.sln
+
+      - name: Build (Debug)
+        run: dotnet build MovieReleaseCalendar.sln --configuration Debug --no-restore
+
+      - name: Test (Debug)
+        run: dotnet test MovieReleaseCalendar.sln --configuration Debug --no-build --verbosity normal
