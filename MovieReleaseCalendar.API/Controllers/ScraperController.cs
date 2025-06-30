@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -10,7 +11,7 @@ namespace MovieReleaseCalendar.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ScraperController : ControllerBase
+    public partial class ScraperController : ControllerBase
     {
         private readonly IScraperService _scraperService;
         private readonly ILogger<ScraperController> _logger;
@@ -22,11 +23,14 @@ namespace MovieReleaseCalendar.API.Controllers
         }
 
         [HttpPost("run")]
-        public async Task<ActionResult<List<Movie>>> RunScraper()
+        public async Task<ActionResult<List<Movie>>> RunScraper([FromBody] ScraperRunRequest request)
         {
             try
             {
-                var result = await _scraperService.ScrapeAsync();
+                var years = (request?.Years != null && request.Years.Any())
+                    ? request.Years.ToArray()
+                    : [DateTime.UtcNow.Year - 1, DateTime.UtcNow.Year, DateTime.UtcNow.Year + 1];
+                var result = await _scraperService.ScrapeAsync(years);
                 return Ok(new { Imported = result.Count, Movies = result });
             }
             catch (Exception ex)

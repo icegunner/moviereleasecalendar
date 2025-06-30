@@ -38,13 +38,26 @@ namespace MovieReleaseCalendar.API.Services
         public async Task<List<Movie>> ScrapeAsync()
         {
             var years = new[] { DateTime.UtcNow.Year - 1, DateTime.UtcNow.Year, DateTime.UtcNow.Year + 1 };
+            return await ScrapeAsync(years);
+        }
+
+        public async Task<List<Movie>> ScrapeAsync(IEnumerable<int> years)
+        {
+            var yearArray = years?.ToArray() ?? Array.Empty<int>();
             var results = new List<Movie>();
+
+            if (yearArray.Length == 0)
+            {
+                _logger.LogWarning("No years provided for scraping. Returning empty results.");
+                return results;
+            }
+
             var seen = new HashSet<string>();
             _genres = await LoadGenresAsync();
 
             using var session = _store.OpenAsyncSession();
 
-            foreach (var year in years)
+            foreach (var year in yearArray)
             {
                 var html = await TryFetchHtmlForYearAsync(year);
                 if (string.IsNullOrEmpty(html)) continue;
@@ -80,7 +93,7 @@ namespace MovieReleaseCalendar.API.Services
                 await session.SaveChangesAsync();
             }
 
-            await DeleteNonExistingMovies(session, years, seen);
+            await DeleteNonExistingMovies(session, yearArray, seen);
 
             return results;
         }
