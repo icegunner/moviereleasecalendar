@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using MovieReleaseCalendar.API.Models;
 using Newtonsoft.Json;
 using Raven.Client.Documents;
+using Raven.Client.Documents.Linq;
 using Raven.Client.Documents.Session;
 using System;
 using System.Collections.Generic;
@@ -26,8 +27,6 @@ namespace MovieReleaseCalendar.API.Services
 
         private List<TmDbGenre> _genres;
 
-        private static readonly int[] YEARS = [DateTime.UtcNow.Year - 1, DateTime.UtcNow.Year, DateTime.UtcNow.Year + 1];
-
         public ScraperService(IDocumentStore store, ILogger<ScraperService> logger, IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _store = store;
@@ -38,13 +37,14 @@ namespace MovieReleaseCalendar.API.Services
 
         public async Task<List<Movie>> ScrapeAsync()
         {
+            var years = new[] { DateTime.UtcNow.Year - 1, DateTime.UtcNow.Year, DateTime.UtcNow.Year + 1 };
             var results = new List<Movie>();
             var seen = new HashSet<string>();
             _genres = await LoadGenresAsync();
 
             using var session = _store.OpenAsyncSession();
 
-            foreach (var year in YEARS)
+            foreach (var year in years)
             {
                 var html = await TryFetchHtmlForYearAsync(year);
                 if (string.IsNullOrEmpty(html)) continue;
@@ -61,6 +61,13 @@ namespace MovieReleaseCalendar.API.Services
                 _logger.LogTrace($"Found {tags.Count(s => s.Name == "h4")} \"h4\" (release dates) and {tags.Count(s => s.Name == "p" && s.GetClasses().Contains("sched"))} \"p\" (titles) tags.");
                 foreach (var tag in tags.Where(t => t.Name == "h4" || (t.Name == "p" && t.GetClasses().Contains("sched"))))
                 {
+                    if (tag.Name == "h4" && tag.FirstChild.Name == "a")
+                    {
+                        // This is the last H4 tag containing links to next and previous years, skip it
+                        _logger.LogInformation($"Finished traversing nodes for year {year}.");
+                        continue;
+                    }
+
                     if (tag.Name == "h4")
                     {
                         releaseDate = GetDateFromTag(tag, year);
@@ -72,7 +79,30 @@ namespace MovieReleaseCalendar.API.Services
                 }
                 await session.SaveChangesAsync();
             }
+
+            await DeleteNonExistingMovies(session, years, seen);
+
             return results;
+        }
+
+        protected async Task DeleteNonExistingMovies(IAsyncDocumentSession session, int[] years, HashSet<string> seen)
+        {
+            _logger.LogInformation($"Looking for movie titles stored that no longer exist on firstshowing.net for years: {string.Join(", ", years)}");
+            var allExisting = await session.Query<Movie>().ToListAsync();
+            var allExistingIds = allExisting
+                .Where(m => years.Contains(m.ReleaseDate.Year))
+                .Select(m => m.Id);
+            _logger.LogDebug($"Found {allExistingIds.Count()} existing movie IDs for years: {string.Join(", ", years)}");
+
+            var idsToDelete = allExistingIds.Except(seen).ToList();
+            _logger.LogInformation($"Deleting {idsToDelete.Count} movie title(s) that no longer exist on firstshowing.net (removed, renamed, etc.).");
+            foreach (var id in idsToDelete)
+            {
+                session.Delete(id);
+                _logger.LogDebug($"Deleted movie with ID: {id} (no longer present on source site)");
+            }
+            await session.SaveChangesAsync();
+            _logger.LogInformation($"Finished deleting non-existing movies for years: {string.Join(", ", years)}");
         }
 
         protected async Task ProcessMovieTitlesAsync(HtmlNode tag, DateTime releaseDate, IAsyncDocumentSession session, HashSet<string> seen, List<Movie> results)
@@ -86,7 +116,7 @@ namespace MovieReleaseCalendar.API.Services
 
                 var (title, cleanTitle, normalizedTitle) = ExtractTitles(aGroup[0]);
                 var fullLink = NormalizeLink(aGroup[0]);
-                var key = $"{title}_{releaseDate:yyyy-MM-dd}";
+                var key = $"{normalizedTitle}_{releaseDate:yyyy-MM-dd}";
 
                 if (!seen.Add(key)) continue;
 
@@ -212,7 +242,11 @@ namespace MovieReleaseCalendar.API.Services
         protected async Task<Movie> BuildNewMovieAsync(string title, string cleanTitle, DateTime releaseDate, string fullLink, string id)
         {
             var tmdbDetails = await GetMovieDetailsFromTmdbAsync(cleanTitle, releaseDate);
-            var tmdbCredits = await GetMovieCreditsFromTmDbAsync(tmdbDetails.Id);
+            (string Cast, string Director) tmdbCredits = (string.Empty, string.Empty);
+            if (tmdbDetails.Id != 0)
+            {
+                tmdbCredits = await GetMovieCreditsFromTmDbAsync(tmdbDetails.Id);
+            }
 
             return new Movie
             {
@@ -230,7 +264,11 @@ namespace MovieReleaseCalendar.API.Services
         protected async Task UpdateExistingMovieAsync(Movie movie, string cleanTitle, DateTime releaseDate, string fullLink)
         {
             var tmdbDetails = await GetMovieDetailsFromTmdbAsync(cleanTitle, releaseDate);
-            var tmdbCredits = await GetMovieCreditsFromTmDbAsync(tmdbDetails.Id);
+            (string Cast, string Director) tmdbCredits = (string.Empty, string.Empty);
+            if (tmdbDetails.Id != 0)
+            {
+                tmdbCredits = await GetMovieCreditsFromTmDbAsync(tmdbDetails.Id);
+            }
 
             movie.Description = $"{tmdbDetails.Description}\nStarring: {tmdbCredits.Cast}.\nDirected by: {tmdbCredits.Director}.\n{fullLink}";
             movie.Genres = tmdbDetails.Genres;
@@ -304,26 +342,25 @@ namespace MovieReleaseCalendar.API.Services
                 return (0, "No description available", new List<string>(), string.Empty);
             }
 
+            var titlesToTry = GetAlternativeTitles(title);
             try
             {
-                var tmdbUrl = $"https://api.themoviedb.org/3/search/movie?query={Uri.EscapeDataString(title)}&year={releaseDate.Year}";
-                var tmdbResponse = await MakeApiCall<TmDbResponse>(tmdbUrl);
-
-                if (tmdbResponse.Result.TotalResults == 0)
+                foreach (var t in titlesToTry)
                 {
-                    _logger.LogDebug($"No results found for {title} ({releaseDate.Year})");
-                    return (0, "No description available", new List<string>(), string.Empty);
+                    var searchResult = await TmdbSearchAsync<TmDbResponse>(t, releaseDate.Year);
+                    if (searchResult.Result.TotalResults > 0)
+                    {
+                        var tmdbMovie = searchResult.Result.Movies.First();
+                        var description = string.IsNullOrEmpty(tmdbMovie.Overview) ? "No description available" : tmdbMovie.Overview;
+                        var genres = tmdbMovie.GenreIds.Select(id => _genres.FirstOrDefault(s => s.Id == id)?.Name ?? id.ToString()).ToList();
+                        var posterUrl = !string.IsNullOrEmpty(tmdbMovie.PosterPath) ? $"https://image.tmdb.org/t/p/w500{tmdbMovie.PosterPath}" : string.Empty;
+                        return (tmdbMovie.Id, description, genres, posterUrl);
+                    }
+                    _logger.LogDebug($"No results found for \"{t}\" ({releaseDate.Year}).");
                 }
 
-                var tmdbMovie = tmdbResponse.Result.Movies.First();
-                var description = string.IsNullOrEmpty(tmdbMovie.Overview) ? "No description available" : tmdbMovie.Overview;
-                var genres = tmdbMovie.GenreIds.Select(id => _genres.FirstOrDefault(s => s.Id == id)?.Name ?? id.ToString()).ToList();
-                var posterUrl = tmdbMovie.PosterPath;
-                if (!string.IsNullOrEmpty(posterUrl))
-                {
-                    posterUrl = $"https://image.tmdb.org/t/p/w500{posterUrl}";
-                }
-                return (tmdbMovie.Id, description, genres, posterUrl);
+                _logger.LogDebug($"No results found for any title variant of \"{title}\" ({releaseDate.Year}).");
+                return (0, "No description available", new List<string>(), string.Empty);
             }
             catch (Exception ex)
             {
@@ -331,7 +368,28 @@ namespace MovieReleaseCalendar.API.Services
                 return (0, "No description available", new List<string>(), string.Empty);
             }
         }
+
+        private List<string> GetAlternativeTitles(string title)
+        {
+            var titles = new List<string> { title };
+
+            // Remove anything after colon or dash
+            var baseTitle = Regex.Replace(title, @"\s*[:\-]\s*.*$", "");
+            if (baseTitle != title) titles.Add(baseTitle);
+
+            // Remove possessives, HTML entities, and after colon/dash
+            var superCleanTitle = Regex.Replace(title, @"(\b[\p{L}\p{M}\p{N}\.]+(?:\s+[\p{L}\p{M}\p{N}\.]+)*'s?\s+)|(&#\d+;)|(\s*[:\-]\s*.*$)", "").TrimEnd();
+            if (superCleanTitle != baseTitle && superCleanTitle != title) titles.Add(superCleanTitle);
+
+            return titles.Distinct().ToList();
+        }
         #endregion Movie Building and Updating
+
+        protected async Task<(TmDbResponse Result, HttpResponseMessage Response)> TmdbSearchAsync<T>(string title, int year)
+        {
+            var tmdbUrl = $"https://api.themoviedb.org/3/search/movie?query={Uri.EscapeDataString(title)}&language=en-US&year={year}";
+            return await MakeApiCall<TmDbResponse>(tmdbUrl);
+        }
 
         private async Task<(T Result, HttpResponseMessage Response)> MakeApiCall<T>(string requestUri, AuthenticationHeaderValue authHeader = null, HttpMethod method = null, HttpContent content = null, bool includeResponse = false)
         {
