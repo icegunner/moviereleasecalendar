@@ -7,22 +7,57 @@
 
         <!-- FullCalendar JS -->
         <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.js"></script>
+        <link rel="stylesheet" href="/css/site.css" />
+        <style>
+            body {
+                opacity: 0;
+                transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            body.fade-in {
+                opacity: 1;
+            }
+            .modal-confirm {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.7);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1001;
+            }
+        </style>
     </head>
     <body>
-        <h1>🎬 Movie Release Calendar</h1>
-        <div class="toolbar">
-            <label
-                ><input type="checkbox" id="toggleMode" checked /> Dark
-                Mode</label
-            >
+        <div class="header-flex-row">
+            <div class="header-spacer"></div>
+            <h1>🎬 Movie Release Calendar</h1>
+            <div class="toolbar">
+                <label><input type="checkbox" id="toggleMode" checked /> Dark Mode</label>
+                <button id="runScraperBtn" class="run-scraper-btn">Run Scraper</button>
+            </div>
+        </div>
+        <div id="modalConfirm" class="modal-confirm" style="display: none">
+            <div class="modal-content">
+                <p>Are you sure you want to run the scraper?</p>
+                <button id="modalYes" class="modal-btn modal-yes">Yes</button>
+                <button id="modalNo" class="modal-btn modal-no">No</button>
+            </div>
         </div>
         <div id="calendar"></div>
 
         <script>
             document.addEventListener("DOMContentLoaded", function () {
+                document.body.classList.add("fade-in");
                 const body = document.body;
                 const toggle = document.getElementById("toggleMode");
                 const calendarEl = document.getElementById("calendar");
+                const runScraperBtn = document.getElementById("runScraperBtn");
+                const modal = document.getElementById("modalConfirm");
+                const modalYes = document.getElementById("modalYes");
+                const modalNo = document.getElementById("modalNo");
 
                 toggle.addEventListener("change", function () {
                     body.classList.toggle("light-mode", !toggle.checked);
@@ -37,12 +72,6 @@
                     },
                     height: "auto",
                     events: "/api/calendar/events.json",
-                    eventClick: function (info) {
-                        if (info.event.url) {
-                            window.open(info.event.url, "_blank");
-                            info.jsEvent.preventDefault();
-                        }
-                    },
                     eventDidMount: function (info) {
                         const description =
                             info.event.extendedProps?.description ||
@@ -50,7 +79,11 @@
                             "";
                         if (description) {
                             const tooltip = document.createElement("div");
-                            tooltip.innerHTML = description;
+                            // Replace \n with <br> for line breaks
+                            tooltip.innerHTML = description.replace(
+                                /\n/g,
+                                "<br>"
+                            );
                             tooltip.style.position = "absolute";
                             tooltip.style.background = "#222";
                             tooltip.style.color = "#fff";
@@ -62,9 +95,58 @@
                             document.body.appendChild(tooltip);
 
                             info.el.addEventListener("mouseenter", (e) => {
-                                tooltip.style.left = e.pageX + 10 + "px";
-                                tooltip.style.top = e.pageY + 10 + "px";
                                 tooltip.style.display = "block";
+                                // Calculate position to keep tooltip in viewport
+                                const padding = 10;
+                                const rect = tooltip.getBoundingClientRect();
+                                let left = e.pageX + padding;
+                                let top = e.pageY + padding;
+                                const vw = window.innerWidth;
+                                const vh = window.innerHeight;
+                                // If tooltip would overflow right, move to left
+                                if (left + rect.width > vw) {
+                                    left = e.pageX - rect.width - padding;
+                                }
+                                // If tooltip would overflow bottom, move up
+                                if (top + rect.height > vh) {
+                                    top = e.pageY - rect.height - padding;
+                                }
+                                // Clamp to viewport
+                                left = Math.max(
+                                    padding,
+                                    Math.min(left, vw - rect.width - padding)
+                                );
+                                top = Math.max(
+                                    padding,
+                                    Math.min(top, vh - rect.height - padding)
+                                );
+                                tooltip.style.left = left + "px";
+                                tooltip.style.top = top + "px";
+                            });
+                            info.el.addEventListener("mousemove", (e) => {
+                                // Update position on mouse move
+                                const padding = 10;
+                                const rect = tooltip.getBoundingClientRect();
+                                let left = e.pageX + padding;
+                                let top = e.pageY + padding;
+                                const vw = window.innerWidth;
+                                const vh = window.innerHeight;
+                                if (left + rect.width > vw) {
+                                    left = e.pageX - rect.width - padding;
+                                }
+                                if (top + rect.height > vh) {
+                                    top = e.pageY - rect.height - padding;
+                                }
+                                left = Math.max(
+                                    padding,
+                                    Math.min(left, vw - rect.width - padding)
+                                );
+                                top = Math.max(
+                                    padding,
+                                    Math.min(top, vh - rect.height - padding)
+                                );
+                                tooltip.style.left = left + "px";
+                                tooltip.style.top = top + "px";
                             });
                             info.el.addEventListener("mouseleave", () => {
                                 tooltip.style.display = "none";
@@ -77,9 +159,41 @@
                             info.jsEvent.preventDefault();
                         }
                     },
-                    events: data
                 });
                 calendar.render();
+
+                runScraperBtn.addEventListener("click", function () {
+                    modal.style.display = "flex";
+                });
+                modalNo.addEventListener("click", function () {
+                    modal.style.display = "none";
+                });
+                modalYes.addEventListener("click", async function () {
+                    modal.style.display = "none";
+                    try {
+                        runScraperBtn.disabled = true;
+                        runScraperBtn.textContent = "Running...";
+                        const resp = await fetch("/api/scraper/run", {
+                            method: "POST",
+                        });
+                        if (resp.ok) {
+                            alert("Scraper started successfully.");
+                        } else {
+                            alert("Failed to start scraper.");
+                        }
+                    } catch {
+                        alert("Error contacting server.");
+                    } finally {
+                        runScraperBtn.disabled = false;
+                        runScraperBtn.textContent = "Run Scraper";
+                    }
+                });
+                // Close modal when clicking outside modal-content
+                modal.addEventListener("click", function (e) {
+                    if (!e.target.closest('.modal-content')) {
+                        modal.style.display = "none";
+                    }
+                });
             });
         </script>
     </body>
