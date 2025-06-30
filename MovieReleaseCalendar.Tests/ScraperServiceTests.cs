@@ -11,6 +11,9 @@ using System.Net.Http;
 using System.Threading;
 using System;
 using Raven.Embedded;
+using Raven.Client.Json.Serialization.NewtonsoftJson;
+using Newtonsoft.Json.Serialization;
+using Raven.Client.Documents.Conventions;
 
 namespace MovieReleaseCalendar.Tests
 {
@@ -20,7 +23,9 @@ namespace MovieReleaseCalendar.Tests
         private readonly Mock<IHttpClientFactory> _httpClientFactoryMock = new();
         private readonly Mock<IConfiguration> _configurationMock = new();
 
-        private ScraperService CreateService(IDocumentStore store, HttpClient httpClient = null, string apiKey = "fake-key")
+        string FirstCharToLower(string str) => $"{char.ToLower(str[0])}{str.Substring(1)}";
+
+        public ScraperServiceTests()
         {
             ConfigureServer(new TestServerOptions
             {
@@ -29,7 +34,28 @@ namespace MovieReleaseCalendar.Tests
                     ThrowOnInvalidOrMissingLicense = false
                 }
             });
+        }
 
+        protected override void PreInitialize(IDocumentStore documentStore)
+        {
+            documentStore.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
+            {
+                CustomizeJsonSerializer = s => s.ContractResolver = new CamelCasePropertyNamesContractResolver()
+            };
+            documentStore.Conventions.PropertyNameConverter = memberInfo => FirstCharToLower(memberInfo.Name);
+            documentStore.Conventions.FindCollectionName = type =>
+            {
+                if (type == typeof(Movie))
+                    return "movies";
+                return DocumentConventions.DefaultGetCollectionName(type);
+            };
+            documentStore.Conventions.MaxNumberOfRequestsPerSession = int.MaxValue;
+            documentStore.Conventions.RegisterAsyncIdConvention<Movie>((dbname, metadata) => Task.FromResult($"movie/{metadata.Id}"));
+            base.PreInitialize(documentStore);
+        }
+
+        private ScraperService CreateService(IDocumentStore store, HttpClient httpClient = null, string apiKey = "fake-key")
+        {
             _httpClientFactoryMock.Reset();
             _configurationMock.Reset();
             _configurationMock.Setup(c => c["TMDb:ApiKey"]).Returns(apiKey);
@@ -69,7 +95,7 @@ namespace MovieReleaseCalendar.Tests
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
                 It.Is<It.IsAnyType>((v, t) => v != null && v.ToString() != null && v.ToString().Contains("TMDb API key is not configured.")),
-				null,
+                null,
                 It.IsAny<Func<It.IsAnyType, Exception, string>>()), Times.Once);
         }
 
