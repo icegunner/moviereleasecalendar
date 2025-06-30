@@ -174,6 +174,106 @@ namespace MovieReleaseCalendar.Tests
             Assert.Equal("Action", result[0].Genres[0]);
         }
 
+        [Fact]
+        public async Task ScrapeAsync_DeletesMoviesNotInSource()
+        {
+            using var store = GetDocumentStore();
+            var fakeTmdbResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"genres\":[{\"id\":1,\"name\":\"Action\"}]}" , System.Text.Encoding.UTF8, "application/json")
+            };
+            // HTML for year 1: movie present, year 2: movie missing
+            var htmlYear1 = @"<h4><strong>June 1</strong></h4><p class='sched'><a href='https://example.com'>Movie One</a><br /></p>";
+            var htmlYear2 = @"<h4><strong>June 1</strong></h4><p class='sched'></p>";
+            var fakeHtmlResponse1 = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(htmlYear1, System.Text.Encoding.UTF8, "text/html")
+            };
+            var fakeHtmlResponse2 = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(htmlYear2, System.Text.Encoding.UTF8, "text/html")
+            };
+            var fakeTmdbMovieResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"results\":[{\"title\":\"Movie One\",\"overview\":\"Desc\",\"genre_ids\":[1],\"poster_path\":\"/poster.jpg\",\"release_date\":\"2024-06-01\"}],\"total_results\":1}", System.Text.Encoding.UTF8, "application/json")
+            };
+            // First scrape: movie is present
+            var handlerQueue1 = new Queue<HttpResponseMessage>(new[] { fakeTmdbResponse, fakeHtmlResponse1, fakeTmdbMovieResponse });
+            var httpClient1 = new HttpClient(new DelegatingHandlerStub(handlerQueue1));
+            var service1 = CreateService(store, httpClient: httpClient1);
+            var result1 = await service1.ScrapeAsync(new[] { 2024 });
+            Assert.Single(result1);
+            // Second scrape: movie is missing, should be deleted
+            var handlerQueue2 = new Queue<HttpResponseMessage>(new[] { fakeTmdbResponse, fakeHtmlResponse2 });
+            var httpClient2 = new HttpClient(new DelegatingHandlerStub(handlerQueue2));
+            var service2 = CreateService(store, httpClient: httpClient2);
+            var result2 = await service2.ScrapeAsync(new[] { 2024 });
+            Assert.Empty(result2);
+        }
+
+        [Fact]
+        public async Task ScrapeAsync_DoesNotAddDuplicateMovies()
+        {
+            using var store = GetDocumentStore();
+            var fakeTmdbResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"genres\":[{\"id\":1,\"name\":\"Action\"}]}" , System.Text.Encoding.UTF8, "application/json")
+            };
+            var html = @"<h4><strong>June 1</strong></h4><p class='sched'><a href='https://example.com'>Movie One</a><a href='https://example.com'>Movie One</a><br /></p>";
+            var fakeHtmlResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(html, System.Text.Encoding.UTF8, "text/html")
+            };
+            var fakeTmdbMovieResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"results\":[{\"title\":\"Movie One\",\"overview\":\"Desc\",\"genre_ids\":[1],\"poster_path\":\"/poster.jpg\",\"release_date\":\"2024-06-01\"}],\"total_results\":1}", System.Text.Encoding.UTF8, "application/json")
+            };
+            var handlerQueue = new Queue<HttpResponseMessage>(new[] { fakeTmdbResponse, fakeHtmlResponse, fakeTmdbMovieResponse });
+            var httpClient = new HttpClient(new DelegatingHandlerStub(handlerQueue));
+            var service = CreateService(store, httpClient: httpClient);
+            var result = await service.ScrapeAsync(new[] { 2024 });
+            Assert.Single(result);
+        }
+
+        [Fact]
+        public async Task BuildNewMovieAsync_SetsScrapedAtToRecentValue()
+        {
+            var service = CreateTestableService(GetDocumentStore(), apiKey: null);
+            var before = DateTimeOffset.UtcNow.AddSeconds(-5);
+            var result = await service.BuildNewMovieAsync("Test", "Test", new DateTime(2024, 6, 1), "https://example.com", "test_2024-06-01");
+            var after = DateTimeOffset.UtcNow.AddSeconds(5);
+            Assert.True(result.ScrapedAt >= before && result.ScrapedAt <= after);
+        }
+
+        [Fact]
+        public async Task ScrapeAsync_LogsInformation_WhenMovieAddedOrDeleted()
+        {
+            using var store = GetDocumentStore();
+            var fakeTmdbResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"genres\":[{\"id\":1,\"name\":\"Action\"}]}" , System.Text.Encoding.UTF8, "application/json")
+            };
+            var html = @"<h4><strong>June 1</strong></h4><p class='sched'><a href='https://example.com'>Movie One</a><br /></p>";
+            var fakeHtmlResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(html, System.Text.Encoding.UTF8, "text/html")
+            };
+            var fakeTmdbMovieResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"results\":[{\"title\":\"Movie One\",\"overview\":\"Desc\",\"genre_ids\":[1],\"poster_path\":\"/poster.jpg\",\"release_date\":\"2024-06-01\"}],\"total_results\":1}", System.Text.Encoding.UTF8, "application/json")
+            };
+            var handlerQueue = new Queue<HttpResponseMessage>(new[] { fakeTmdbResponse, fakeHtmlResponse, fakeTmdbMovieResponse });
+            var httpClient = new HttpClient(new DelegatingHandlerStub(handlerQueue));
+            var service = CreateService(store, httpClient: httpClient);
+            await service.ScrapeAsync(new[] { 2024 });
+            _loggerMock.Verify(l => l.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v != null && v.ToString().Contains("Stored: Movie One")),
+                null,
+                It.IsAny<Func<It.IsAnyType, Exception, string>>()), Times.Once);
+        }
+
         public class FakeHttpMessageHandler : HttpMessageHandler
         {
             private readonly HttpResponseMessage _response;
