@@ -267,7 +267,7 @@ namespace MovieReleaseCalendar.API.Services
                 Title = title,
                 ReleaseDate = releaseDate,
                 Url = fullLink,
-                Description = $"{tmdbDetails.Description}{(tmdbDetails.Id == 0 ? $"\nStarring: {tmdbCredits.Cast}.\nDirected by: {tmdbCredits.Director}." : "")}\n{fullLink}",
+                Description = $"{tmdbDetails.Description}{(string.IsNullOrEmpty(tmdbCredits.Cast) ? "" : $"\nStarring: {tmdbCredits.Cast}.")}{(string.IsNullOrEmpty(tmdbCredits.Director) ? "" : "\nDirected by: {tmdbCredits.Director}.")}\n{fullLink}",
                 Genres = tmdbDetails.Genres,
                 PosterUrl = tmdbDetails.PosterUrl,
                 ScrapedAt = DateTimeOffset.UtcNow
