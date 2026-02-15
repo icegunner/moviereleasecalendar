@@ -37,21 +37,7 @@ jobs:
     - name: Test
       run: dotnet test MovieReleaseCalendar.sln --no-build --verbosity normal
 
-    - name: Publish Docker image (Debug)
-      if: github.ref == 'refs/heads/main'
+    - name: Build and push Docker image
       run: |
-        docker build -f Dockerfile.Debug -t moviereleasecalendar:debug .
-    - name: Publish Docker image (Release)
-      if: github.ref == 'refs/heads/main'
-      run: |
-        docker build -f Dockerfile.Release -t moviereleasecalendar:release .
-
-    # - name: Build Docker image
-    #   run: |
-    #     docker build --no-cache -t ghcr.io/${{ github.repository }}:latest \
-    #                  -t ghcr.io/${{ github.repository }}:${{ env.VERSION }} .
-
-    # - name: Push Docker images
-    #   run: |
-    #     docker push ghcr.io/${{ github.repository }}:latest
-    #     docker push ghcr.io/${{ github.repository }}:${{ env.VERSION }}
+        docker build --no-cache -t ghcr.io/${{ github.repository }}:latest .
+        docker push ghcr.io/${{ github.repository }}:latest
