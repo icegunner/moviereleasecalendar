@@ -1,0 +1,19 @@
+using MovieReleaseCalendar.API.Models;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace MovieReleaseCalendar.API.Services
+{
+    public interface IMovieRepository
+    {
+        Task<List<Movie>> GetAllMoviesAsync();
+        Task<Movie> GetMovieByIdAsync(string id);
+        Task<List<Movie>> GetMoviesByYearAsync(int year);
+        Task<List<Movie>> GetMoviesByYearsAsync(int[] years);
+        Task AddMovieAsync(Movie movie);
+        Task UpdateMovieAsync(Movie movie);
+        Task DeleteMovieAsync(string id);
+        Task SaveChangesAsync();
+    }
+}

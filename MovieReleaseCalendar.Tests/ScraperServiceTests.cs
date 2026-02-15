@@ -1,8 +1,6 @@
 using Moq;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
-using Raven.Client.Documents;
-using Raven.TestDriver;
 using MovieReleaseCalendar.API.Models;
 using MovieReleaseCalendar.API.Services;
 using System.Threading.Tasks;
@@ -10,14 +8,25 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System;
-using Raven.Embedded;
-using Raven.Client.Json.Serialization.NewtonsoftJson;
-using Newtonsoft.Json.Serialization;
-using Raven.Client.Documents.Conventions;
+using System.Linq;
 
 namespace MovieReleaseCalendar.Tests
 {
-    public class ScraperServiceTests : RavenTestDriver
+    // In-memory test repository for IMovieRepository
+    public class TestMovieRepository : IMovieRepository
+    {
+        private readonly Dictionary<string, Movie> _movies = new();
+        public Task<Movie> GetMovieByIdAsync(string id) => Task.FromResult(_movies.TryGetValue(id, out var m) ? m : null);
+        public Task<List<Movie>> GetMoviesByYearAsync(int year) => Task.FromResult(new List<Movie>(_movies.Values.Where(m => m.ReleaseDate.Year == year)));
+        public Task<List<Movie>> GetMoviesByYearsAsync(int[] years) => Task.FromResult(new List<Movie>(_movies.Values.Where(m => years.Contains(m.ReleaseDate.Year))));
+        public Task<List<Movie>> GetAllMoviesAsync() => Task.FromResult(new List<Movie>(_movies.Values));
+        public Task AddMovieAsync(Movie movie) { _movies[movie.Id] = movie; return Task.CompletedTask; }
+        public Task UpdateMovieAsync(Movie movie) { _movies[movie.Id] = movie; return Task.CompletedTask; }
+        public Task DeleteMovieAsync(string id) { _movies.Remove(id); return Task.CompletedTask; }
+        public Task SaveChangesAsync() => Task.CompletedTask;
+    }
+
+    public class ScraperServiceTests
     {
         // Helper classes must be defined before their usage in test methods
         public class FakeHttpMessageHandler : HttpMessageHandler
@@ -43,8 +52,8 @@ namespace MovieReleaseCalendar.Tests
 
         public class TestableScraperService : ScraperService
         {
-            public TestableScraperService(IDocumentStore store, ILogger<ScraperService> logger, IHttpClientFactory httpClientFactory, IConfiguration configuration)
-                : base(store, logger, httpClientFactory, configuration) { }
+            public TestableScraperService(IMovieRepository repo, ILogger<ScraperService> logger, IHttpClientFactory httpClientFactory, IConfiguration configuration)
+                : base(repo, logger, httpClientFactory, configuration) { }
 
             public virtual new List<HtmlAgilityPack.HtmlNode> CollectAnchorGroup(ref HtmlAgilityPack.HtmlNode node) => base.CollectAnchorGroup(ref node);
             public virtual new bool IsStruckThrough(HtmlAgilityPack.HtmlNode anchor) => base.IsStruckThrough(anchor);
@@ -57,65 +66,35 @@ namespace MovieReleaseCalendar.Tests
             public virtual new Task<(int, string, List<string>, string)> GetMovieDetailsFromTmdbAsync(string title, DateTime releaseDate) => base.GetMovieDetailsFromTmdbAsync(title, releaseDate);
             public virtual new Task<Movie> BuildNewMovieAsync(string title, string cleanTitle, DateTime releaseDate, string fullLink, string id) => base.BuildNewMovieAsync(title, cleanTitle, releaseDate, fullLink, id);
             public virtual new Task UpdateExistingMovieAsync(Movie movie, string cleanTitle, DateTime releaseDate, string fullLink) => base.UpdateExistingMovieAsync(movie, cleanTitle, releaseDate, fullLink);
+            public virtual new Task DeleteNonExistingMovies(int[] years, HashSet<string> seen) => base.DeleteNonExistingMovies(years, seen);
+            public virtual new Task ProcessMovieTitlesAsync(HtmlAgilityPack.HtmlNode tag, DateTime releaseDate, HashSet<string> seen, List<Movie> results) => base.ProcessMovieTitlesAsync(tag, releaseDate, seen, results);
         }
 
         private readonly Mock<ILogger<ScraperService>> _loggerMock = new();
         private readonly Mock<IHttpClientFactory> _httpClientFactoryMock = new();
         private readonly Mock<IConfiguration> _configurationMock = new();
 
-        string FirstCharToLower(string str) => $"{char.ToLower(str[0])}{str.Substring(1)}";
-
-        static ScraperServiceTests()
-        {
-            ConfigureServer(new TestServerOptions
-            {
-                Licensing = new ServerOptions.LicensingOptions
-                {
-                    ThrowOnInvalidOrMissingLicense = false
-                }
-            });
-        }
-
-        protected override void PreInitialize(IDocumentStore documentStore)
-        {
-            documentStore.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
-            {
-                CustomizeJsonSerializer = s => s.ContractResolver = new CamelCasePropertyNamesContractResolver()
-            };
-            documentStore.Conventions.PropertyNameConverter = memberInfo => FirstCharToLower(memberInfo.Name);
-            documentStore.Conventions.FindCollectionName = type =>
-            {
-                if (type == typeof(Movie))
-                    return "movies";
-                return DocumentConventions.DefaultGetCollectionName(type);
-            };
-            documentStore.Conventions.MaxNumberOfRequestsPerSession = int.MaxValue;
-            documentStore.Conventions.RegisterAsyncIdConvention<Movie>((dbname, metadata) => Task.FromResult($"movie/{metadata.Id}"));
-            base.PreInitialize(documentStore);
-        }
-
-        private ScraperService CreateService(IDocumentStore store, HttpClient httpClient = null, string apiKey = "fake-key")
+        private ScraperService CreateService(IMovieRepository repo, HttpClient httpClient = null, string apiKey = "fake-key")
         {
             _httpClientFactoryMock.Reset();
             _configurationMock.Reset();
             _configurationMock.Setup(c => c["TMDb:ApiKey"]).Returns(apiKey);
             _httpClientFactoryMock.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(httpClient ?? new HttpClient());
             return new ScraperService(
-                store,
+                repo,
                 _loggerMock.Object,
                 _httpClientFactoryMock.Object,
                 _configurationMock.Object
             );
         }
-
-        private TestableScraperService CreateTestableService(IDocumentStore store, HttpClient httpClient = null, string apiKey = "fake-key")
+        private TestableScraperService CreateTestableService(IMovieRepository repo, HttpClient httpClient = null, string apiKey = "fake-key")
         {
             _httpClientFactoryMock.Reset();
             _configurationMock.Reset();
             _configurationMock.Setup(c => c["TMDb:ApiKey"]).Returns(apiKey);
             _httpClientFactoryMock.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(httpClient ?? new HttpClient());
             return new TestableScraperService(
-                store,
+                repo,
                 _loggerMock.Object,
                 _httpClientFactoryMock.Object,
                 _configurationMock.Object
@@ -125,8 +104,8 @@ namespace MovieReleaseCalendar.Tests
         [Fact]
         public async Task ScrapeAsync_ReturnsEmptyList_WhenApiKeyMissing()
         {
-            using var store = GetDocumentStore();
-            var service = CreateService(store, apiKey: null);
+            var repo = new TestMovieRepository();
+            var service = CreateService(repo, apiKey: null);
 
             // Act
             var result = await service.ScrapeAsync(new int[0]);
@@ -138,8 +117,8 @@ namespace MovieReleaseCalendar.Tests
         [Fact]
         public async Task ScrapeAsync_LogsWarning_WhenApiKeyMissing()
         {
-            using var store = GetDocumentStore();
-            var service = CreateService(store, apiKey: null);
+            var repo = new TestMovieRepository();
+            var service = CreateService(repo, apiKey: null);
 
             // Act
             await service.ScrapeAsync(new int[0]);
@@ -156,13 +135,13 @@ namespace MovieReleaseCalendar.Tests
         [Fact]
         public async Task ScrapeAsync_ReturnsEmptyList_WhenTmdbApiFails()
         {
-            using var store = GetDocumentStore();
+            var repo = new TestMovieRepository();
             var fakeResponse = new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError)
             {
                 Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json")
             };
             var httpClient = new HttpClient(new FakeHttpMessageHandler(fakeResponse));
-            var service = CreateService(store, httpClient: httpClient);
+            var service = CreateService(repo, httpClient: httpClient);
 
             // Act
             var result = await service.ScrapeAsync();
@@ -174,7 +153,7 @@ namespace MovieReleaseCalendar.Tests
         [Fact]
         public async Task ScrapeAsync_ReturnsEmptyList_WhenHtmlFetchFails()
         {
-            using var store = GetDocumentStore();
+            var repo = new TestMovieRepository();
             var fakeTmdbResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
                 Content = new StringContent("{\"genres\":[]}", System.Text.Encoding.UTF8, "application/json")
@@ -185,7 +164,7 @@ namespace MovieReleaseCalendar.Tests
             };
             var handlerQueue = new Queue<HttpResponseMessage>(new[] { fakeTmdbResponse, fakeHtmlResponse });
             var httpClient = new HttpClient(new DelegatingHandlerStub(handlerQueue));
-            var service = CreateService(store, httpClient: httpClient);
+            var service = CreateService(repo, httpClient: httpClient);
 
             // Act
             var result = await service.ScrapeAsync();
@@ -197,7 +176,7 @@ namespace MovieReleaseCalendar.Tests
         [Fact]
         public async Task ScrapeAsync_ReturnsMovie_WhenAllExternalCallsSucceed()
         {
-            using var store = GetDocumentStore();
+            var repo = new TestMovieRepository();
             var fakeTmdbResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
                 Content = new StringContent("{\"genres\":[{\"id\":1,\"name\":\"Action\"}]}" , System.Text.Encoding.UTF8, "application/json")
@@ -222,7 +201,7 @@ namespace MovieReleaseCalendar.Tests
                 fakeTmdbMovieResponse  // movie search 3 (alt title)
             });
             var httpClient = new HttpClient(new DelegatingHandlerStub(handlerQueue));
-            var service = CreateService(store, httpClient: httpClient);
+            var service = CreateService(repo, httpClient: httpClient);
             var result = await service.ScrapeAsync(new[] { year });
             Assert.NotNull(result);
             Assert.Single(result);
@@ -234,7 +213,7 @@ namespace MovieReleaseCalendar.Tests
         [Fact]
         public async Task ScrapeAsync_DeletesMoviesNotInSource()
         {
-            using var store = GetDocumentStore();
+            var repo = new TestMovieRepository();
             var fakeTmdbResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
                 Content = new StringContent("{\"genres\":[{\"id\":1,\"name\":\"Action\"}]}" , System.Text.Encoding.UTF8, "application/json")
@@ -260,13 +239,13 @@ namespace MovieReleaseCalendar.Tests
                 fakeTmdbMovieResponse, fakeTmdbMovieResponse, fakeTmdbMovieResponse
             });
             var httpClient1 = new HttpClient(new DelegatingHandlerStub(handlerQueue1));
-            var service1 = CreateService(store, httpClient: httpClient1);
+            var service1 = CreateService(repo, httpClient: httpClient1);
             var result1 = await service1.ScrapeAsync(new[] { year });
             Assert.Single(result1);
             // Second scrape: movie is missing, should be deleted
             var handlerQueue2 = new Queue<HttpResponseMessage>(new[] { fakeTmdbResponse, fakeHtmlResponse2 });
             var httpClient2 = new HttpClient(new DelegatingHandlerStub(handlerQueue2));
-            var service2 = CreateService(store, httpClient: httpClient2);
+            var service2 = CreateService(repo, httpClient: httpClient2);
             var result2 = await service2.ScrapeAsync(new[] { year });
             Assert.Empty(result2);
         }
@@ -274,7 +253,7 @@ namespace MovieReleaseCalendar.Tests
         [Fact]
         public async Task ScrapeAsync_DoesNotAddDuplicateMovies()
         {
-            using var store = GetDocumentStore();
+            var repo = new TestMovieRepository();
             var fakeTmdbResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
                 Content = new StringContent("{\"genres\":[{\"id\":1,\"name\":\"Action\"}]}" , System.Text.Encoding.UTF8, "application/json")
@@ -290,7 +269,7 @@ namespace MovieReleaseCalendar.Tests
             };
             var handlerQueue = new Queue<HttpResponseMessage>(new[] { fakeTmdbResponse, fakeHtmlResponse, fakeTmdbMovieResponse, fakeTmdbMovieResponse, fakeTmdbMovieResponse });
             var httpClient = new HttpClient(new DelegatingHandlerStub(handlerQueue));
-            var service = CreateService(store, httpClient: httpClient);
+            var service = CreateService(repo, httpClient: httpClient);
             var result = await service.ScrapeAsync(new[] { 2024 });
             Assert.Single(result);
         }
@@ -298,7 +277,7 @@ namespace MovieReleaseCalendar.Tests
         [Fact]
         public async Task BuildNewMovieAsync_SetsScrapedAtToRecentValue()
         {
-            var service = CreateTestableService(GetDocumentStore(), apiKey: null);
+            var service = CreateTestableService(new TestMovieRepository(), apiKey: null);
             var before = DateTimeOffset.UtcNow.AddSeconds(-5);
             var result = await service.BuildNewMovieAsync("Test", "Test", new DateTime(2024, 6, 1), "https://example.com", "test_2024-06-01");
             var after = DateTimeOffset.UtcNow.AddSeconds(5);
@@ -308,7 +287,7 @@ namespace MovieReleaseCalendar.Tests
         [Fact]
         public async Task ScrapeAsync_LogsInformation_WhenMovieAddedOrDeleted()
         {
-            using var store = GetDocumentStore();
+            var repo = new TestMovieRepository();
             var fakeTmdbResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
                 Content = new StringContent("{\"genres\":[{\"id\":1,\"name\":\"Action\"}]}" , System.Text.Encoding.UTF8, "application/json")
@@ -324,7 +303,7 @@ namespace MovieReleaseCalendar.Tests
             };
             var handlerQueue = new Queue<HttpResponseMessage>(new[] { fakeTmdbResponse, fakeHtmlResponse, fakeTmdbMovieResponse });
             var httpClient = new HttpClient(new DelegatingHandlerStub(handlerQueue));
-            var service = CreateService(store, httpClient: httpClient);
+            var service = CreateService(repo, httpClient: httpClient);
             await service.ScrapeAsync(new[] { 2024 });
             _loggerMock.Verify(l => l.Log(
                 LogLevel.Information,
@@ -337,7 +316,7 @@ namespace MovieReleaseCalendar.Tests
         [Fact]
         public async Task ScrapeAsync_MapsGenreIdsToNames()
         {
-            using var store = GetDocumentStore();
+            var repo = new TestMovieRepository();
             var fakeTmdbResponse = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
                 Content = new StringContent("{\"genres\":[{\"id\":1,\"name\":\"Action\"},{\"id\":2,\"name\":\"Comedy\"}]}" , System.Text.Encoding.UTF8, "application/json")
@@ -357,7 +336,7 @@ namespace MovieReleaseCalendar.Tests
                 fakeTmdbMovieResponse, fakeTmdbMovieResponse, fakeTmdbMovieResponse
             });
             var httpClient = new HttpClient(new DelegatingHandlerStub(handlerQueue));
-            var service = CreateService(store, httpClient: httpClient);
+            var service = CreateService(repo, httpClient: httpClient);
 
             // Act
             var result = await service.ScrapeAsync(new[] { year });
@@ -374,13 +353,13 @@ namespace MovieReleaseCalendar.Tests
         [Fact]
         public async Task LoadGenresAsync_CanBeMockedInTest()
         {
-            var store = GetDocumentStore();
-            var service = new TestableScraperService(store, _loggerMock.Object, _httpClientFactoryMock.Object, _configurationMock.Object)
+            var repo = new TestMovieRepository();
+            var service = new TestableScraperService(repo, _loggerMock.Object, _httpClientFactoryMock.Object, _configurationMock.Object)
             {
                 // Override LoadGenresAsync for this test
                 // C# syntax: override in a derived class
             };
-            var mockService = new MockedScraperService(store, _loggerMock.Object, _httpClientFactoryMock.Object, _configurationMock.Object);
+            var mockService = new MockedScraperService(repo, _loggerMock.Object, _httpClientFactoryMock.Object, _configurationMock.Object);
             var result = await mockService.LoadGenresAsync();
             Assert.Single(result);
             Assert.Equal("MockGenre", result[0].Name);
@@ -389,10 +368,152 @@ namespace MovieReleaseCalendar.Tests
         // Inline derived class for mocking
         public class MockedScraperService : TestableScraperService
         {
-            public MockedScraperService(IDocumentStore store, ILogger<ScraperService> logger, IHttpClientFactory httpClientFactory, IConfiguration configuration)
-                : base(store, logger, httpClientFactory, configuration) { }
+            public MockedScraperService(IMovieRepository repo, ILogger<ScraperService> logger, IHttpClientFactory httpClientFactory, IConfiguration configuration)
+                : base(repo, logger, httpClientFactory, configuration) { }
             public override Task<List<TmDbGenre>> LoadGenresAsync()
                 => Task.FromResult(new List<TmDbGenre> { new TmDbGenre { Id = 99, Name = "MockGenre" } });
+        }
+
+        [Theory]
+        [InlineData("<a><strong>Title</strong></a>", false)]
+        [InlineData("<a><strong><s>Title</s></strong></a>", true)]
+        [InlineData("<a>Title</a>", true)]
+        public void IsStruckThrough_DetectsStrikethrough(string html, bool expected)
+        {
+            var service = CreateTestableService(new TestMovieRepository());
+            var doc = new HtmlAgilityPack.HtmlDocument();
+            doc.LoadHtml(html);
+            var anchor = doc.DocumentNode.SelectSingleNode("//a");
+            Assert.Equal(expected, service.IsStruckThrough(anchor));
+        }
+
+        [Fact]
+        public void CollectAnchorGroup_ReturnsMultipleAnchors()
+        {
+            var service = CreateTestableService(new TestMovieRepository());
+            var html = "<p class='sched'><a href='1'>A</a><a href='2'>B</a><br /></p>";
+            var doc = new HtmlAgilityPack.HtmlDocument();
+            doc.LoadHtml(html);
+            var node = doc.DocumentNode.SelectSingleNode("//a");
+            var result = service.CollectAnchorGroup(ref node);
+            Assert.Equal(2, result.Count);
+            Assert.Equal("a", result[0].Name);
+            Assert.Equal("a", result[1].Name);
+        }
+
+        [Theory]
+        [InlineData("Test Movie [2024]", "Test Movie", "testmovie")]
+        [InlineData("Another Title", "Another Title", "anothertitle")]
+        public void ExtractTitles_NormalizesCorrectly(string raw, string clean, string normalized)
+        {
+            var service = CreateTestableService(new TestMovieRepository());
+            var html = $"<a>{raw}</a>";
+            var doc = new HtmlAgilityPack.HtmlDocument();
+            doc.LoadHtml(html);
+            var anchor = doc.DocumentNode.SelectSingleNode("//a");
+            var (r, c, n) = service.ExtractTitles(anchor);
+            Assert.Equal(raw, r);
+            Assert.Equal(clean, c);
+            Assert.Equal(normalized, n);
+        }
+
+        [Theory]
+        [InlineData("//example.com", "https://example.com")]
+        [InlineData("https://foo.com", "https://foo.com")]
+        [InlineData("/relative", "/relative")]
+        public void NormalizeLink_HandlesVariousLinks(string href, string expected)
+        {
+            var service = CreateTestableService(new TestMovieRepository());
+            var html = $"<a href='{href}'>Test</a>";
+            var doc = new HtmlAgilityPack.HtmlDocument();
+            doc.LoadHtml(html);
+            var anchor = doc.DocumentNode.SelectSingleNode("//a");
+            Assert.Equal(expected, service.NormalizeLink(anchor));
+        }
+
+        [Theory]
+        [InlineData("<h4><strong>June 1</strong></h4>", 2024, "2024-06-01")]
+        [InlineData("<h4><strong>Invalid</strong></h4>", 2024, null)]
+        public void GetDateFromTag_ParsesOrReturnsNull(string html, int year, string expected)
+        {
+            var service = CreateTestableService(new TestMovieRepository());
+            var doc = new HtmlAgilityPack.HtmlDocument();
+            doc.LoadHtml(html);
+            var tag = doc.DocumentNode.SelectSingleNode("//h4");
+            var result = service.GetDateFromTag(tag, year);
+            if (expected == null)
+                Assert.Null(result);
+            else
+                Assert.Equal(DateTime.Parse(expected), result);
+        }
+
+        [Theory]
+        [InlineData("desc", "poster", new[] { "Action" }, false)]
+        [InlineData("", "poster", new[] { "Action" }, true)]
+        [InlineData("desc", "", new[] { "Action" }, true)]
+        [InlineData("desc", "poster", new string[0], true)]
+        public void NeedsUpdate_ReturnsExpected(string desc, string poster, string[] genres, bool expected)
+        {
+            var service = CreateTestableService(new TestMovieRepository());
+            var movie = new Movie { Description = desc, PosterUrl = poster, Genres = genres == null ? null : new List<string>(genres) };
+            Assert.Equal(expected, service.NeedsUpdate(movie));
+        }
+
+        [Fact]
+        public async Task LoadGenresAsync_ReturnsEmptyOnTmdbError()
+        {
+            var service = CreateTestableService(new TestMovieRepository(), httpClient: new HttpClient(new FakeHttpMessageHandler(new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError))));
+            var result = await service.LoadGenresAsync();
+            Assert.Empty(result);
+        }
+
+        [Fact]
+        public async Task GetMovieDetailsFromTmdbAsync_ReturnsDefaultsOnTmdbError()
+        {
+            var service = CreateTestableService(new TestMovieRepository(), httpClient: new HttpClient(new FakeHttpMessageHandler(new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError))));
+            var result = await service.GetMovieDetailsFromTmdbAsync("Test", new DateTime(2024, 6, 1));
+            Assert.Equal(0, result.Item1);
+            Assert.Equal("No description available", result.Item2);
+            Assert.Empty(result.Item3);
+            Assert.Equal(string.Empty, result.Item4);
+        }
+
+        [Fact]
+        public async Task DeleteNonExistingMovies_DeletesAllAndNone()
+        {
+            var repo = new TestMovieRepository();
+            var movie1 = new Movie { Id = "m1", ReleaseDate = new DateTime(2024, 1, 1) };
+            var movie2 = new Movie { Id = "m2", ReleaseDate = new DateTime(2024, 1, 1) };
+            await repo.AddMovieAsync(movie1);
+            await repo.AddMovieAsync(movie2);
+            await repo.SaveChangesAsync();
+            var service = CreateTestableService(repo);
+            // Delete all
+            await service.DeleteNonExistingMovies(new[] { 2024 }, new HashSet<string>());
+            var all = await repo.GetAllMoviesAsync();
+            Assert.Empty(all);
+            // Add back and delete none
+            await repo.AddMovieAsync(movie1);
+            await repo.SaveChangesAsync();
+            await service.DeleteNonExistingMovies(new[] { 2024 }, new HashSet<string> { "m1" });
+            all = await repo.GetAllMoviesAsync();
+            Assert.Single(all);
+        }
+
+        [Fact]
+        public async Task ProcessMovieTitlesAsync_SkipsStruckThrough()
+        {
+            var repo = new TestMovieRepository();
+            var service = CreateTestableService(repo);
+            var html = "<p class='sched'><a class='showTip'><strong><s>Skip Me</s></strong></a><a class='showTip'><strong>Keep Me</strong></a><br /></p>";
+            var doc = new HtmlAgilityPack.HtmlDocument();
+            doc.LoadHtml(html);
+            var tag = doc.DocumentNode.SelectSingleNode("//p");
+            var seen = new HashSet<string>();
+            var results = new List<Movie>();
+            var date = new DateTime(2024, 1, 1);
+            await service.ProcessMovieTitlesAsync(tag, date, seen, results);
+            Assert.Empty(results);
         }
     }
 }

@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using System;
 using System.Reflection;
 using Microsoft.AspNetCore.Builder;
@@ -6,22 +5,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MovieReleaseCalendar.API.Background;
-using MovieReleaseCalendar.API.Data;
-using MovieReleaseCalendar.API.Models;
 using MovieReleaseCalendar.API.Services;
 using NLog;
 using NLog.Web;
-using Raven.Client.Documents;
-using Raven.Client.Documents.Conventions;
-using Raven.Client.Json.Serialization.NewtonsoftJson;
-using Newtonsoft.Json.Serialization;
 
 public class Program
 {
     public static void Main(string[] args)
     {
-        string FirstCharToLower(string str) => $"{char.ToLower(str[0])}{str.Substring(1)}";
-
         // Setup NLog for Dependency injection and configuration from appsettings.json
         // LogManager.Setup().LoadConfigurationFromAppSettings();
         var logger = LogManager.GetCurrentClassLogger();
@@ -50,33 +41,7 @@ public class Program
 
             // Register RavenDB Document Store
             builder.Services
-                .AddSingleton<IDocumentStore>(provider =>
-                {
-                    var config = builder.Configuration.GetSection("RavenDb");
-                    var store = new DocumentStore
-                    {
-                        Urls = [config["Url"] ?? "http://localhost:8080"],
-                        Database = config["Database"] ?? "MovieReleaseCalendar"
-                    };
-                    store.Conventions.Serialization = new NewtonsoftJsonSerializationConventions
-                    {
-                        CustomizeJsonSerializer = s => s.ContractResolver = new CamelCasePropertyNamesContractResolver()
-                    };
-                    store.Conventions.PropertyNameConverter = memberInfo => FirstCharToLower(memberInfo.Name);
-                    store.Conventions.FindCollectionName = type =>
-                    {
-                        if (type == typeof(Movie))
-                            return "movies";
-                        return DocumentConventions.DefaultGetCollectionName(type);
-                    };
-                    store.Conventions.MaxNumberOfRequestsPerSession = int.MaxValue;
-                    store.Conventions.RegisterAsyncIdConvention<Movie>((dbname, metadata) => Task.FromResult($"movie/{metadata.Id}"));
-                    store.Initialize();
-                    return store;
-                })
-
-                // Register services
-                .AddScoped<RavenDbDocumentStore>()
+                // Register repository based on environment variable
                 .AddScoped<ICalendarService, CalendarService>()
                 .AddScoped<IScraperService, ScraperService>()
                 .AddHttpClient()
@@ -88,6 +53,38 @@ public class Program
                 .AddRouting()
                 .AddControllers();
 
+            // Register repository based on environment variable
+            var dbProvider = Environment.GetEnvironmentVariable("MOVIECALENDAR_DB_PROVIDER")?.ToLowerInvariant() ?? "ravendb";
+            var dbToLog = "RavenDB";
+            switch (dbProvider)
+            {
+                case "orient":
+                case "orientdb":
+                    // OrientDB repository will be registered later
+                    dbToLog = "OrientDB";
+                    break;
+                case "couch":
+                case "couchdb":
+                    // CouchDB repository will be registered later
+                    dbToLog = "CouchDB";
+                    break;
+                case "mongo":
+                case "mongodb":
+                    var mongoConn = builder.Configuration["MongoDb:ConnectionString"] ?? Environment.GetEnvironmentVariable("MONGODB_CONNECTIONSTRING") ?? "mongodb://localhost:27017";
+                    var mongoDb = builder.Configuration["MongoDb:Database"] ?? Environment.GetEnvironmentVariable("MONGODB_DATABASE") ?? "MovieReleaseCalendar";
+                    builder.Services.AddSingleton<IMovieRepository>(sp => new MongoMovieRepository(mongoConn, mongoDb));
+                    dbToLog = "MongoDB";
+                    break;
+                default:
+                    // Register RavenDB Document Store only if using RavenDB
+                    var ravenUrl = builder.Configuration["RavenDb:Url"] ?? Environment.GetEnvironmentVariable("RAVENDB_URL") ?? "http://localhost:8080";
+                    var ravenDb = builder.Configuration["RavenDb:Database"] ?? Environment.GetEnvironmentVariable("RAVENDB_DATABASE") ?? "MovieReleaseCalendar";
+                    builder.Services.AddSingleton(provider => RavenMovieRepository.CreateDocumentStore(ravenUrl, ravenDb));
+                    builder.Services.AddScoped<IMovieRepository, RavenMovieRepository>();
+                    dbToLog = "RavenDB";
+                    break;
+            }
+
             var app = builder.Build();
 
             // Log global startup info using DI logger
@@ -98,6 +95,7 @@ public class Program
             var description = assembly.GetCustomAttribute<AssemblyDescriptionAttribute>()?.Description;
             startupLogger.LogInformation($"{product} ({copyright}) - {description}");
             startupLogger.LogInformation($"Application starting. Version: {typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown"}.");
+            startupLogger.LogInformation($"Using database provider: {dbToLog}");
 
             app
                 .UseStaticFiles()
