@@ -8,10 +8,10 @@
 
   <PropertyGroup>
     <Product>Movie Release Calendar</Product>
-    <Authors>Chris Gunn</Authors>
+    <Authors>Krysta Gunn</Authors>
     <Description>A project that scrapes https://www.firstshowing.net for movie releases and creates a web calendar and ICS file.</Description>
     <RepositoryUrl>https://github.com/icegunner/moviereleasecalendar</RepositoryUrl>
-    <Copyright>Copyright © 2025 Chris Gunn</Copyright>
+    <Copyright>Copyright © 2025 Krysta Gunn</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Version>0.1.11</Version>
     <AssemblyVersion>0.1.11.0</AssemblyVersion>
