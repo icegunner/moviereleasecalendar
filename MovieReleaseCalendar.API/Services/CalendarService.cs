@@ -1,3 +1,4 @@
+using Ical.Net;
 using Ical.Net.CalendarComponents;
 using Ical.Net.DataTypes;
 using Ical.Net.Serialization;
@@ -6,6 +7,8 @@ using MovieReleaseCalendar.API.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace MovieReleaseCalendar.API.Services
@@ -50,24 +53,45 @@ namespace MovieReleaseCalendar.API.Services
         public async Task<string> GenerateIcsFeedAsync()
         {
             var calendar = new Ical.Net.Calendar();
+            calendar.ProductId = "-//MovieReleaseCalendar//EN";
+            calendar.Method = "PUBLISH";
+            calendar.AddProperty("X-WR-CALNAME", "Movie Release Calendar");
+            calendar.AddProperty("X-WR-TIMEZONE", "America/New_York");
+            calendar.AddProperty("X-WR-CALDESC", "A release calendar for major nationwide theatrical movie openings. Based on firstshowing.net and their old Google Calendar.");
+
             var events = await GetCalendarEventsAsync();
 
             foreach (var ev in events)
             {
+                var dtStart = new CalDateTime(DateOnly.FromDateTime(ev.Date.Date));
+                var dtEnd = new CalDateTime(DateOnly.FromDateTime(ev.Date.Date.AddDays(1)));
+
                 var icalEvent = new CalendarEvent
                 {
                     Summary = ev.Title,
-                    DtStart = new CalDateTime(ev.Date.Date),
-                    DtEnd = new CalDateTime(ev.Date.Date.AddDays(1)),
+                    DtStart = dtStart,
+                    DtEnd = dtEnd,
                     Description = ev.Description,
-                    Url = string.IsNullOrWhiteSpace(ev.Url) ? null : new Uri(ev.Url)
+                    Url = string.IsNullOrWhiteSpace(ev.Url) ? null : new Uri(ev.Url),
+                    Transparency = TransparencyType.Transparent,
+                    Status = EventStatus.Confirmed,
+                    Uid = GenerateStableUid(ev.Title, ev.Date)
                 };
+                icalEvent.Properties.Add(new CalendarProperty("SEQUENCE", "0"));
 
                 calendar.Events.Add(icalEvent);
             }
 
             var serializer = new CalendarSerializer(new SerializationContext());
             return serializer.SerializeToString(calendar) ?? string.Empty;
+        }
+
+        private static string GenerateStableUid(string title, DateTime date)
+        {
+            var input = $"{title}|{date:yyyy-MM-dd}";
+            var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+            var hash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant()[..16];
+            return $"{hash}@moviereleacecalendar";
         }
     }
 }
