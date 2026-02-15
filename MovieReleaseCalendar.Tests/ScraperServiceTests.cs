@@ -71,7 +71,7 @@ namespace MovieReleaseCalendar.Tests
             public virtual new Task<Movie> BuildNewMovieAsync(string title, string cleanTitle, DateTime releaseDate, string fullLink, string id, List<TmDbGenre> genres, CancellationToken cancellationToken = default) => base.BuildNewMovieAsync(title, cleanTitle, releaseDate, fullLink, id, genres, cancellationToken);
             public virtual new Task UpdateExistingMovieAsync(Movie movie, string cleanTitle, DateTime releaseDate, string fullLink, List<TmDbGenre> genres, CancellationToken cancellationToken = default) => base.UpdateExistingMovieAsync(movie, cleanTitle, releaseDate, fullLink, genres, cancellationToken);
             public virtual new Task DeleteNonExistingMovies(int[] years, HashSet<string> seen) => base.DeleteNonExistingMovies(years, seen);
-            public virtual new Task ProcessMovieTitlesAsync(HtmlAgilityPack.HtmlNode tag, DateTime releaseDate, HashSet<string> seen, List<Movie> results, List<TmDbGenre> genres, CancellationToken cancellationToken = default) => base.ProcessMovieTitlesAsync(tag, releaseDate, seen, results, genres, cancellationToken);
+            public virtual new Task ProcessMovieTitlesAsync(HtmlAgilityPack.HtmlNode tag, DateTime releaseDate, HashSet<string> seen, ScrapeResult result, List<TmDbGenre> genres, CancellationToken cancellationToken = default) => base.ProcessMovieTitlesAsync(tag, releaseDate, seen, result, genres, cancellationToken);
         }
 
         private readonly Mock<ILogger<ScraperService>> _loggerMock = new();
@@ -115,7 +115,8 @@ namespace MovieReleaseCalendar.Tests
             var result = await service.ScrapeAsync(new int[0]);
 
             // Assert
-            Assert.Empty(result);
+            Assert.Empty(result.NewMovies);
+            Assert.Empty(result.UpdatedMovies);
         }
 
         [Fact]
@@ -151,7 +152,8 @@ namespace MovieReleaseCalendar.Tests
             var result = await service.ScrapeAsync();
 
             // Assert
-            Assert.Empty(result);
+            Assert.Empty(result.NewMovies);
+            Assert.Empty(result.UpdatedMovies);
         }
 
         [Fact]
@@ -174,7 +176,8 @@ namespace MovieReleaseCalendar.Tests
             var result = await service.ScrapeAsync();
 
             // Assert
-            Assert.Empty(result);
+            Assert.Empty(result.NewMovies);
+            Assert.Empty(result.UpdatedMovies);
         }
 
         [Fact]
@@ -208,10 +211,10 @@ namespace MovieReleaseCalendar.Tests
             var service = CreateService(repo, httpClient: httpClient);
             var result = await service.ScrapeAsync(new[] { year });
             Assert.NotNull(result);
-            Assert.Single(result);
-            Assert.Equal("Test Movie", result[0].Title);
-            Assert.Equal("A test movie.\nhttps://example.com/", result[0].Description.Trim());
-            Assert.Equal("Action", result[0].Genres[0]);
+            Assert.Single(result.NewMovies);
+            Assert.Equal("Test Movie", result.NewMovies[0].Title);
+            Assert.Equal("A test movie.\nhttps://example.com/", result.NewMovies[0].Description.Trim());
+            Assert.Equal("Action", result.NewMovies[0].Genres[0]);
         }
 
         [Fact]
@@ -245,13 +248,13 @@ namespace MovieReleaseCalendar.Tests
             var httpClient1 = new HttpClient(new DelegatingHandlerStub(handlerQueue1));
             var service1 = CreateService(repo, httpClient: httpClient1);
             var result1 = await service1.ScrapeAsync(new[] { year });
-            Assert.Single(result1);
+            Assert.Single(result1.NewMovies);
             // Second scrape: movie is missing, should be deleted
             var handlerQueue2 = new Queue<HttpResponseMessage>(new[] { fakeTmdbResponse, fakeHtmlResponse2 });
             var httpClient2 = new HttpClient(new DelegatingHandlerStub(handlerQueue2));
             var service2 = CreateService(repo, httpClient: httpClient2);
             var result2 = await service2.ScrapeAsync(new[] { year });
-            Assert.Empty(result2);
+            Assert.Empty(result2.NewMovies);
         }
 
         [Fact]
@@ -275,7 +278,7 @@ namespace MovieReleaseCalendar.Tests
             var httpClient = new HttpClient(new DelegatingHandlerStub(handlerQueue));
             var service = CreateService(repo, httpClient: httpClient);
             var result = await service.ScrapeAsync(new[] { 2024 });
-            Assert.Single(result);
+            Assert.Single(result.NewMovies);
         }
 
         [Fact]
@@ -347,10 +350,10 @@ namespace MovieReleaseCalendar.Tests
 
             // Assert
             Assert.NotNull(result);
-            Assert.Single(result);
-            Assert.Equal("Test Movie", result[0].Title);
-            Assert.Contains("Action", result[0].Genres);
-            Assert.Contains("Comedy", result[0].Genres);
+            Assert.Single(result.NewMovies);
+            Assert.Equal("Test Movie", result.NewMovies[0].Title);
+            Assert.Contains("Action", result.NewMovies[0].Genres);
+            Assert.Contains("Comedy", result.NewMovies[0].Genres);
         }
 
         // Example: Mocking LoadGenresAsync in a test using an override
@@ -516,10 +519,11 @@ namespace MovieReleaseCalendar.Tests
             doc.LoadHtml(html);
             var tag = doc.DocumentNode.SelectSingleNode("//p");
             var seen = new HashSet<string>();
-            var results = new List<Movie>();
+            var result = new ScrapeResult();
             var date = new DateTime(2024, 1, 1);
-            await service.ProcessMovieTitlesAsync(tag, date, seen, results, new List<TmDbGenre>());
-            Assert.Empty(results);
+            await service.ProcessMovieTitlesAsync(tag, date, seen, result, new List<TmDbGenre>());
+            Assert.Empty(result.NewMovies);
+            Assert.Empty(result.UpdatedMovies);
         }
     }
 }

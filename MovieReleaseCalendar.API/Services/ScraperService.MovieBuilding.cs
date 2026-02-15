@@ -64,10 +64,19 @@ namespace MovieReleaseCalendar.API.Services
                 return new List<TmDbGenre>();
             }
 
+            if (_tmdbDisabled)
+            {
+                return new List<TmDbGenre>();
+            }
+
             try
             {
                 var response = await MakeApiCall<TmDbGenreResponse>("https://api.themoviedb.org/3/genre/movie/list?language=en", cancellationToken: cancellationToken);
-                return response.Result.Genres;
+                if (_tmdbDisabled || response.Result == null)
+                {
+                    return new List<TmDbGenre>();
+                }
+                return response.Result.Genres ?? new List<TmDbGenre>();
             }
             catch (Exception ex)
             {
@@ -78,9 +87,9 @@ namespace MovieReleaseCalendar.API.Services
 
         protected async Task<(string Cast, string Director)> GetMovieCreditsFromTmDbAsync(int movieId, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrEmpty(_tmdbApiKey))
+            if (string.IsNullOrEmpty(_tmdbApiKey) || _tmdbDisabled)
             {
-                _logger.LogWarning("TMDb API key is not configured. Skipping TMDb lookup.");
+                _logger.LogWarning("TMDb API key is either not configured or has problems. Skipping TMDb lookup.");
                 return (string.Empty, string.Empty);
             }
 
@@ -109,9 +118,9 @@ namespace MovieReleaseCalendar.API.Services
 
         protected async Task<(int Id, string Description, List<string> Genres, string PosterUrl)> GetMovieDetailsFromTmdbAsync(string title, DateTime releaseDate, List<TmDbGenre> genres, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrEmpty(_tmdbApiKey))
+            if (string.IsNullOrEmpty(_tmdbApiKey) || _tmdbDisabled)
             {
-                _logger.LogWarning("TMDb API key is not configured. Skipping TMDb lookup.");
+                _logger.LogWarning("TMDb API key is either not configured or has problems. Skipping TMDb lookup.");
                 return (0, "No description available", new List<string>(), string.Empty);
             }
 
@@ -121,6 +130,10 @@ namespace MovieReleaseCalendar.API.Services
                 foreach (var t in titlesToTry)
                 {
                     var searchResult = await TmdbSearchAsync<TmDbResponse>(t, releaseDate.Year, cancellationToken);
+                    if (_tmdbDisabled || searchResult.Result == null)
+                    {
+                        return (0, "No description available", new List<string>(), string.Empty);
+                    }
                     if (searchResult.Result.TotalResults > 0)
                     {
                         var tmdbMovie = searchResult.Result.Movies.First();

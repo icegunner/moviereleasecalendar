@@ -63,6 +63,8 @@
                 <p id="modalMessageText"></p>
                 <button id="modalToggleList" class="modal-btn" style="display:none; margin-bottom:10px;">Show Imported Movies ▼</button>
                 <ul id="modalMovieList" style="display:none; max-height:220px; overflow:auto; text-align:left; margin:0 auto 10px auto; padding-left:1.5em;"></ul>
+                <button id="modalToggleUpdated" class="modal-btn" style="display:none; margin-bottom:10px;">Show Updated Movies ▼</button>
+                <ul id="modalUpdatedList" style="display:none; max-height:220px; overflow:auto; text-align:left; margin:0 auto 10px auto; padding-left:1.5em;"></ul>
                 <button id="modalMessageOk" class="modal-btn modal-yes">Okay</button>
             </div>
         </div>
@@ -88,6 +90,8 @@
                 const modalMessageOk = document.getElementById("modalMessageOk");
                 const modalToggleList = document.getElementById("modalToggleList");
                 const modalMovieList = document.getElementById("modalMovieList");
+                const modalToggleUpdated = document.getElementById("modalToggleUpdated");
+                const modalUpdatedList = document.getElementById("modalUpdatedList");
 
                 toggle.addEventListener("change", function () {
                     body.classList.toggle("light-mode", !toggle.checked);
@@ -254,25 +258,37 @@
                 modalCancel.addEventListener("click", function () {
                     modal.style.display = "none";
                 });
-                function showMessageModal(msg, movies) {
+                function formatMovieList(movies) {
+                    movies.sort((a, b) => new Date(a.releaseDate) - new Date(b.releaseDate));
+                    return movies.map(m => {
+                        const d = new Date(m.releaseDate);
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        const yyyy = d.getFullYear();
+                        return `<li>${m.title} <i>(${mm}-${dd}-${yyyy})</i></li>`;
+                    }).join("");
+                }
+                function showMessageModal(msg, newMovies, updatedMovies) {
                     modalMessageText.textContent = msg;
-                    if (Array.isArray(movies) && movies.length > 0) {
-                        movies.sort((a, b) => new Date(a.releaseDate) - new Date(b.releaseDate));
+                    if (Array.isArray(newMovies) && newMovies.length > 0) {
                         modalToggleList.style.display = "inline-block";
                         modalMovieList.style.display = "none";
                         modalToggleList.textContent = "Show Imported Movies ▼";
-                        // Format releaseDate as MM-dd-yyyy
-                        modalMovieList.innerHTML = movies.map(m => {
-                            const d = new Date(m.releaseDate);
-                            const mm = String(d.getMonth() + 1).padStart(2, '0');
-                            const dd = String(d.getDate()).padStart(2, '0');
-                            const yyyy = d.getFullYear();
-                            return `<li>${m.title} <i>(${mm}-${dd}-${yyyy})</i></li>`;
-                        }).join("");
+                        modalMovieList.innerHTML = formatMovieList(newMovies);
                     } else {
                         modalToggleList.style.display = "none";
                         modalMovieList.style.display = "none";
                         modalMovieList.innerHTML = "";
+                    }
+                    if (Array.isArray(updatedMovies) && updatedMovies.length > 0) {
+                        modalToggleUpdated.style.display = "inline-block";
+                        modalUpdatedList.style.display = "none";
+                        modalToggleUpdated.textContent = "Show Updated Movies ▼";
+                        modalUpdatedList.innerHTML = formatMovieList(updatedMovies);
+                    } else {
+                        modalToggleUpdated.style.display = "none";
+                        modalUpdatedList.style.display = "none";
+                        modalUpdatedList.innerHTML = "";
                     }
                     modalMessage.style.display = "flex";
                 }
@@ -283,6 +299,15 @@
                     } else {
                         modalMovieList.style.display = "none";
                         modalToggleList.textContent = "Show Imported Movies ▼";
+                    }
+                });
+                modalToggleUpdated.addEventListener("click", function () {
+                    if (modalUpdatedList.style.display === "none") {
+                        modalUpdatedList.style.display = "block";
+                        modalToggleUpdated.textContent = "Hide Updated Movies ▲";
+                    } else {
+                        modalUpdatedList.style.display = "none";
+                        modalToggleUpdated.textContent = "Show Updated Movies ▼";
                     }
                 });
                 modalMessageOk.addEventListener("click", function () {
@@ -302,11 +327,14 @@
                         });
                         if (resp.ok) {
                             const data = await resp.json();
-                            if (data.imported === 0) {
-                                showMessageModal("No new movies were imported.");
+                            if (data.imported === 0 && data.updated === 0) {
+                                showMessageModal("No new or updated movies found.");
                                 return;
                             }
-                            showMessageModal(`Scraper completed successfully. Imported: ${data.imported}`, data.movies || []);
+                            const parts = [];
+                            if (data.imported > 0) parts.push(`Imported: ${data.imported}`);
+                            if (data.updated > 0) parts.push(`Updated: ${data.updated}`);
+                            showMessageModal(`Scraper completed successfully. ${parts.join(", ")}`, data.newMovies || [], data.updatedMovies || []);
                         } else {
                             showMessageModal("Failed to start scraper.");
                         }

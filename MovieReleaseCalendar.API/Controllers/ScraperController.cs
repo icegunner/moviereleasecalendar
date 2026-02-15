@@ -31,7 +31,7 @@ namespace MovieReleaseCalendar.API.Controllers
                     ? request.Years.ToArray()
                     : [DateTime.UtcNow.Year - 1, DateTime.UtcNow.Year, DateTime.UtcNow.Year + 1];
                 var result = await _scraperService.ScrapeAsync(years);
-                return Ok(new { Imported = result.Count, Movies = result });
+                return Ok(new { Imported = result.NewMovies.Count, Updated = result.UpdatedMovies.Count, NewMovies = result.NewMovies, UpdatedMovies = result.UpdatedMovies });
             }
             catch (Exception ex)
             {

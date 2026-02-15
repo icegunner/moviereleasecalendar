@@ -22,6 +22,7 @@ namespace MovieReleaseCalendar.API.Services
         private readonly ILogger<ScraperService> _logger;
         private readonly HttpClient _client;
         private readonly string _tmdbApiKey;
+        private bool _tmdbDisabled;
 
         public ScraperService(IMovieRepository movieRepository, ILogger<ScraperService> logger, IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
@@ -31,21 +32,21 @@ namespace MovieReleaseCalendar.API.Services
             _tmdbApiKey = Environment.GetEnvironmentVariable("TMDB_APIKEY") ?? configuration["TMDb:ApiKey"];
         }
 
-        public async Task<List<Movie>> ScrapeAsync(CancellationToken cancellationToken = default)
+        public async Task<ScrapeResult> ScrapeAsync(CancellationToken cancellationToken = default)
         {
             var years = new[] { DateTime.UtcNow.Year - 1, DateTime.UtcNow.Year, DateTime.UtcNow.Year + 1 };
             return await ScrapeAsync(years, cancellationToken);
         }
 
-        public async Task<List<Movie>> ScrapeAsync(IEnumerable<int> years, CancellationToken cancellationToken = default)
+        public async Task<ScrapeResult> ScrapeAsync(IEnumerable<int> years, CancellationToken cancellationToken = default)
         {
             var yearArray = years?.ToArray() ?? Array.Empty<int>();
-            var results = new List<Movie>();
+            var result = new ScrapeResult();
 
             if (yearArray.Length == 0)
             {
                 _logger.LogWarning("No years provided for scraping. Returning empty results.");
-                return results;
+                return result;
             }
 
             var seen = new HashSet<string>();
@@ -84,14 +85,14 @@ namespace MovieReleaseCalendar.API.Services
                     }
                     else if (tag.Name == "p" && tag.GetClasses().Contains("sched") && releaseDate != null)
                     {
-                        await ProcessMovieTitlesAsync(tag, releaseDate.Value, seen, results, genres, cancellationToken);
+                        await ProcessMovieTitlesAsync(tag, releaseDate.Value, seen, result, genres, cancellationToken);
                     }
                 }
             }
 
             await DeleteNonExistingMovies(yearArray, seen);
 
-            return results;
+            return result;
         }
 
         protected async Task DeleteNonExistingMovies(int[] years, HashSet<string> seen)
@@ -114,7 +115,7 @@ namespace MovieReleaseCalendar.API.Services
             _logger.LogInformation($"Finished deleting non-existing movies for years: {string.Join(", ", years)}");
         }
 
-        protected async Task ProcessMovieTitlesAsync(HtmlNode tag, DateTime releaseDate, HashSet<string> seen, List<Movie> results, List<TmDbGenre> genres, CancellationToken cancellationToken = default)
+        protected async Task ProcessMovieTitlesAsync(HtmlNode tag, DateTime releaseDate, HashSet<string> seen, ScrapeResult result, List<TmDbGenre> genres, CancellationToken cancellationToken = default)
         {
             var node = tag.FirstChild;
 
@@ -135,13 +136,14 @@ namespace MovieReleaseCalendar.API.Services
                 if (existing == null)
                 {
                     var movie = await BuildNewMovieAsync(title, cleanTitle, releaseDate, fullLink, key, genres, cancellationToken);
-                    results.Add(movie);
+                    result.NewMovies.Add(movie);
                     await _movieRepository.AddMovieAsync(movie);
                     _logger.LogInformation($"Stored: {title} on {releaseDate:yyyy-MM-dd}");
                 }
                 else if (NeedsUpdate(existing))
                 {
                     await UpdateExistingMovieAsync(existing, cleanTitle, releaseDate, fullLink, genres, cancellationToken);
+                    result.UpdatedMovies.Add(existing);
                     await _movieRepository.UpdateMovieAsync(existing);
                     _logger.LogInformation($"Updated existing movie: {title} on {releaseDate:yyyy-MM-dd}");
                 }
@@ -180,6 +182,17 @@ namespace MovieReleaseCalendar.API.Services
 
             if (!response.IsSuccessStatusCode)
             {
+                var statusCode = (int)response.StatusCode;
+                if (statusCode == 401 || statusCode == 403)
+                {
+                    _logger.LogError($"TMDb API returned {statusCode} ({response.ReasonPhrase}). The API key may be invalid, expired, or unauthorized. All further TMDb calls will be skipped for this scrape run.");
+                    _tmdbDisabled = true;
+                }
+                else
+                {
+                    _logger.LogWarning($"TMDb API returned {statusCode} ({response.ReasonPhrase}) for request: {requestUri}");
+                }
+
                 if (!includeResponse)
                     response.Dispose();
                 return (default, includeResponse ? response : null);

@@ -7,7 +7,7 @@ namespace MovieReleaseCalendar.API.Services
 {
 	public interface IScraperService
     {
-        Task<List<Movie>> ScrapeAsync(CancellationToken cancellationToken = default);
-        Task<List<Movie>> ScrapeAsync(IEnumerable<int> years, CancellationToken cancellationToken = default);
+        Task<ScrapeResult> ScrapeAsync(CancellationToken cancellationToken = default);
+        Task<ScrapeResult> ScrapeAsync(IEnumerable<int> years, CancellationToken cancellationToken = default);
     }
 }
