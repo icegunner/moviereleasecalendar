@@ -31,7 +31,7 @@ jobs:
     - name: Build
       run: dotnet build MovieReleaseCalendar.sln --configuration Release --no-restore
     - name: Test
-      run: dotnet test MovieReleaseCalendar.sln --no-build --verbosity normal
+      run: dotnet test MovieReleaseCalendar.sln --configuration Release --no-build --verbosity normal
 
     - name: Build and push Docker image
       run: |
