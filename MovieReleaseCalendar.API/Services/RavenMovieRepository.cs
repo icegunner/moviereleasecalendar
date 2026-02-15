@@ -114,6 +114,16 @@ namespace MovieReleaseCalendar.API.Services
             await session.SaveChangesAsync();
         }
 
+        public async Task DeleteMoviesAsync(IEnumerable<string> ids)
+        {
+            using var session = _store.OpenAsyncSession();
+            foreach (var id in ids)
+            {
+                session.Delete(id);
+            }
+            await session.SaveChangesAsync();
+        }
+
         public Task SaveChangesAsync() => Task.CompletedTask; // Each op is immediate
     }
 }

@@ -103,10 +103,13 @@ namespace MovieReleaseCalendar.API.Services
 
             var idsToDelete = allExistingIds.Except(seen).ToList();
             _logger.LogInformation($"Deleting {idsToDelete.Count} movie title(s) that no longer exist on firstshowing.net (removed, renamed, etc.).");
-            foreach (var id in idsToDelete)
+            if (idsToDelete.Count > 0)
             {
-                await _movieRepository.DeleteMovieAsync(id);
-                _logger.LogDebug($"Deleted movie with ID: {id} (no longer present on source site)");
+                await _movieRepository.DeleteMoviesAsync(idsToDelete);
+                foreach (var id in idsToDelete)
+                {
+                    _logger.LogDebug($"Deleted movie with ID: {id} (no longer present on source site)");
+                }
             }
             _logger.LogInformation($"Finished deleting non-existing movies for years: {string.Join(", ", years)}");
         }

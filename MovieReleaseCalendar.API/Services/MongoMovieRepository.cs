@@ -2,6 +2,7 @@ using MovieReleaseCalendar.API.Models;
 using MongoDB.Driver;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace MovieReleaseCalendar.API.Services
@@ -78,6 +79,14 @@ namespace MovieReleaseCalendar.API.Services
         {
             var filter = Builders<Movie>.Filter.Eq(m => m.Id, id);
             await _collection.DeleteOneAsync(filter);
+        }
+
+        public async Task DeleteMoviesAsync(IEnumerable<string> ids)
+        {
+            var idList = ids.ToList();
+            if (idList.Count == 0) return;
+            var filter = Builders<Movie>.Filter.In(m => m.Id, idList);
+            await _collection.DeleteManyAsync(filter);
         }
 
         public Task SaveChangesAsync() => Task.CompletedTask; // MongoDB is immediate

@@ -17,6 +17,7 @@ namespace MovieReleaseCalendar.API.Services
         Task AddMovieAsync(Movie movie);
         Task UpdateMovieAsync(Movie movie);
         Task DeleteMovieAsync(string id);
+        Task DeleteMoviesAsync(IEnumerable<string> ids);
         Task SaveChangesAsync();
     }
 }

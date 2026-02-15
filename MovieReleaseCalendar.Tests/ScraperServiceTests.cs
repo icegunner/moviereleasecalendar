@@ -26,6 +26,7 @@ namespace MovieReleaseCalendar.Tests
         public Task AddMovieAsync(Movie movie) { _movies[movie.Id] = movie; return Task.CompletedTask; }
         public Task UpdateMovieAsync(Movie movie) { _movies[movie.Id] = movie; return Task.CompletedTask; }
         public Task DeleteMovieAsync(string id) { _movies.Remove(id); return Task.CompletedTask; }
+        public Task DeleteMoviesAsync(IEnumerable<string> ids) { foreach (var id in ids) _movies.Remove(id); return Task.CompletedTask; }
         public Task SaveChangesAsync() => Task.CompletedTask;
     }
 
