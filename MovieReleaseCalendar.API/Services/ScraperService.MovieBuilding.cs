@@ -5,19 +5,20 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace MovieReleaseCalendar.API.Services
 {
     public partial class ScraperService
     {
-        protected async Task<Movie> BuildNewMovieAsync(string title, string cleanTitle, DateTime releaseDate, string fullLink, string id)
+        protected async Task<Movie> BuildNewMovieAsync(string title, string cleanTitle, DateTime releaseDate, string fullLink, string id, List<TmDbGenre> genres, CancellationToken cancellationToken = default)
         {
-            var tmdbDetails = await GetMovieDetailsFromTmdbAsync(cleanTitle, releaseDate);
+            var tmdbDetails = await GetMovieDetailsFromTmdbAsync(cleanTitle, releaseDate, genres, cancellationToken);
             (string Cast, string Director) tmdbCredits = (string.Empty, string.Empty);
             if (tmdbDetails.Id != 0)
             {
-                tmdbCredits = await GetMovieCreditsFromTmDbAsync(tmdbDetails.Id);
+                tmdbCredits = await GetMovieCreditsFromTmDbAsync(tmdbDetails.Id, cancellationToken);
             }
 
             return new Movie
@@ -26,23 +27,23 @@ namespace MovieReleaseCalendar.API.Services
                 Title = title,
                 ReleaseDate = releaseDate,
                 Url = fullLink,
-                Description = $"{tmdbDetails.Description}{(string.IsNullOrEmpty(tmdbCredits.Cast) ? "" : $"\nStarring: {tmdbCredits.Cast}.")}{(string.IsNullOrEmpty(tmdbCredits.Director) ? "" : "\nDirected by: {tmdbCredits.Director}.")}\n{fullLink}",
+                Description = $"{tmdbDetails.Description}{(string.IsNullOrEmpty(tmdbCredits.Cast) ? "" : $"\nStarring: {tmdbCredits.Cast}.")}{(string.IsNullOrEmpty(tmdbCredits.Director) ? "" : $"\nDirected by: {tmdbCredits.Director}.")}\n{fullLink}",
                 Genres = tmdbDetails.Genres,
                 PosterUrl = tmdbDetails.PosterUrl,
                 ScrapedAt = DateTimeOffset.UtcNow
             };
         }
 
-        protected async Task UpdateExistingMovieAsync(Movie movie, string cleanTitle, DateTime releaseDate, string fullLink)
+        protected async Task UpdateExistingMovieAsync(Movie movie, string cleanTitle, DateTime releaseDate, string fullLink, List<TmDbGenre> genres, CancellationToken cancellationToken = default)
         {
-            var tmdbDetails = await GetMovieDetailsFromTmdbAsync(cleanTitle, releaseDate);
+            var tmdbDetails = await GetMovieDetailsFromTmdbAsync(cleanTitle, releaseDate, genres, cancellationToken);
             (string Cast, string Director) tmdbCredits = (string.Empty, string.Empty);
             if (tmdbDetails.Id != 0)
             {
-                tmdbCredits = await GetMovieCreditsFromTmDbAsync(tmdbDetails.Id);
+                tmdbCredits = await GetMovieCreditsFromTmDbAsync(tmdbDetails.Id, cancellationToken);
             }
 
-            movie.Description = $"{tmdbDetails.Description}\nStarring: {(string.IsNullOrEmpty(tmdbCredits.Cast) ? "Unknown" : tmdbCredits.Cast)}.\nDirected by: {(string.IsNullOrEmpty(tmdbCredits.Director) ? "Unknown" : tmdbCredits.Director)}.\n{fullLink}";
+            movie.Description = $"{tmdbDetails.Description}{(string.IsNullOrEmpty(tmdbCredits.Cast) ? "" : $"\nStarring: {tmdbCredits.Cast}.")}{(string.IsNullOrEmpty(tmdbCredits.Director) ? "" : $"\nDirected by: {tmdbCredits.Director}.")}\n{fullLink}";
             movie.Genres = tmdbDetails.Genres;
             movie.PosterUrl = tmdbDetails.PosterUrl;
         }
@@ -55,7 +56,7 @@ namespace MovieReleaseCalendar.API.Services
                    movie.Genres == null || !movie.Genres.Any();
         }
 
-        protected async Task<List<TmDbGenre>> LoadGenresAsync()
+        protected async Task<List<TmDbGenre>> LoadGenresAsync(CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(_tmdbApiKey))
             {
@@ -65,7 +66,7 @@ namespace MovieReleaseCalendar.API.Services
 
             try
             {
-                var response = await MakeApiCall<TmDbGenreResponse>("https://api.themoviedb.org/3/genre/movie/list?language=en");
+                var response = await MakeApiCall<TmDbGenreResponse>("https://api.themoviedb.org/3/genre/movie/list?language=en", cancellationToken: cancellationToken);
                 return response.Result.Genres;
             }
             catch (Exception ex)
@@ -75,7 +76,7 @@ namespace MovieReleaseCalendar.API.Services
             }
         }
 
-        protected async Task<(string Cast, string Director)> GetMovieCreditsFromTmDbAsync(int movieId)
+        protected async Task<(string Cast, string Director)> GetMovieCreditsFromTmDbAsync(int movieId, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(_tmdbApiKey))
             {
@@ -86,7 +87,7 @@ namespace MovieReleaseCalendar.API.Services
             try
             {
                 var tmdbUrl = $"https://api.themoviedb.org/3/movie/{movieId}/credits?api_key={_tmdbApiKey}";
-                var tmdbResponse = await MakeApiCall<TmdbCreditsResponse>(tmdbUrl);
+                var tmdbResponse = await MakeApiCall<TmdbCreditsResponse>(tmdbUrl, cancellationToken: cancellationToken);
 
                 if (tmdbResponse.Result == null)
                 {
@@ -106,7 +107,7 @@ namespace MovieReleaseCalendar.API.Services
             }
         }
 
-        protected async Task<(int Id, string Description, List<string> Genres, string PosterUrl)> GetMovieDetailsFromTmdbAsync(string title, DateTime releaseDate)
+        protected async Task<(int Id, string Description, List<string> Genres, string PosterUrl)> GetMovieDetailsFromTmdbAsync(string title, DateTime releaseDate, List<TmDbGenre> genres, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(_tmdbApiKey))
             {
@@ -119,14 +120,14 @@ namespace MovieReleaseCalendar.API.Services
             {
                 foreach (var t in titlesToTry)
                 {
-                    var searchResult = await TmdbSearchAsync<TmDbResponse>(t, releaseDate.Year);
+                    var searchResult = await TmdbSearchAsync<TmDbResponse>(t, releaseDate.Year, cancellationToken);
                     if (searchResult.Result.TotalResults > 0)
                     {
                         var tmdbMovie = searchResult.Result.Movies.First();
                         var description = string.IsNullOrEmpty(tmdbMovie.Overview) ? "No description available" : tmdbMovie.Overview;
-                        var genres = tmdbMovie.GenreIds.Select(id => _genres.FirstOrDefault(s => s.Id == id)?.Name ?? id.ToString()).ToList();
+                        var movieGenres = tmdbMovie.GenreIds.Select(id => genres.FirstOrDefault(s => s.Id == id)?.Name ?? id.ToString()).ToList();
                         var posterUrl = !string.IsNullOrEmpty(tmdbMovie.PosterPath) ? $"https://image.tmdb.org/t/p/w500{tmdbMovie.PosterPath}" : string.Empty;
-                        return (tmdbMovie.Id, description, genres, posterUrl);
+                        return (tmdbMovie.Id, description, movieGenres, posterUrl);
                     }
                     _logger.LogDebug($"No results found for \"{t}\" ({releaseDate.Year}).");
                 }

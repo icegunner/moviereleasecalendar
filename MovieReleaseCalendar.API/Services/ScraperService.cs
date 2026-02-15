@@ -11,6 +11,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace MovieReleaseCalendar.API.Services
@@ -22,8 +23,6 @@ namespace MovieReleaseCalendar.API.Services
         private readonly HttpClient _client;
         private readonly string _tmdbApiKey;
 
-        private List<TmDbGenre> _genres;
-
         public ScraperService(IMovieRepository movieRepository, ILogger<ScraperService> logger, IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _movieRepository = movieRepository;
@@ -32,13 +31,13 @@ namespace MovieReleaseCalendar.API.Services
             _tmdbApiKey = Environment.GetEnvironmentVariable("TMDB_APIKEY") ?? configuration["TMDb:ApiKey"];
         }
 
-        public async Task<List<Movie>> ScrapeAsync()
+        public async Task<List<Movie>> ScrapeAsync(CancellationToken cancellationToken = default)
         {
             var years = new[] { DateTime.UtcNow.Year - 1, DateTime.UtcNow.Year, DateTime.UtcNow.Year + 1 };
-            return await ScrapeAsync(years);
+            return await ScrapeAsync(years, cancellationToken);
         }
 
-        public async Task<List<Movie>> ScrapeAsync(IEnumerable<int> years)
+        public async Task<List<Movie>> ScrapeAsync(IEnumerable<int> years, CancellationToken cancellationToken = default)
         {
             var yearArray = years?.ToArray() ?? Array.Empty<int>();
             var results = new List<Movie>();
@@ -50,11 +49,12 @@ namespace MovieReleaseCalendar.API.Services
             }
 
             var seen = new HashSet<string>();
-            _genres = await LoadGenresAsync();
+            var genres = await LoadGenresAsync(cancellationToken);
 
             foreach (var year in yearArray)
             {
-                var html = await TryFetchHtmlForYearAsync(year);
+                cancellationToken.ThrowIfCancellationRequested();
+                var html = await TryFetchHtmlForYearAsync(year, cancellationToken);
                 if (string.IsNullOrEmpty(html)) continue;
 
                 var doc = new HtmlDocument();
@@ -84,7 +84,7 @@ namespace MovieReleaseCalendar.API.Services
                     }
                     else if (tag.Name == "p" && tag.GetClasses().Contains("sched") && releaseDate != null)
                     {
-                        await ProcessMovieTitlesAsync(tag, releaseDate.Value, seen, results);
+                        await ProcessMovieTitlesAsync(tag, releaseDate.Value, seen, results, genres, cancellationToken);
                     }
                 }
             }
@@ -111,12 +111,13 @@ namespace MovieReleaseCalendar.API.Services
             _logger.LogInformation($"Finished deleting non-existing movies for years: {string.Join(", ", years)}");
         }
 
-        protected async Task ProcessMovieTitlesAsync(HtmlNode tag, DateTime releaseDate, HashSet<string> seen, List<Movie> results)
+        protected async Task ProcessMovieTitlesAsync(HtmlNode tag, DateTime releaseDate, HashSet<string> seen, List<Movie> results, List<TmDbGenre> genres, CancellationToken cancellationToken = default)
         {
             var node = tag.FirstChild;
 
             while (node != null)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var aGroup = CollectAnchorGroup(ref node);
                 if (aGroup.Count == 0 || IsStruckThrough(aGroup[0])) continue;
 
@@ -130,14 +131,14 @@ namespace MovieReleaseCalendar.API.Services
 
                 if (existing == null)
                 {
-                    var movie = await BuildNewMovieAsync(title, cleanTitle, releaseDate, fullLink, key);
+                    var movie = await BuildNewMovieAsync(title, cleanTitle, releaseDate, fullLink, key, genres, cancellationToken);
                     results.Add(movie);
                     await _movieRepository.AddMovieAsync(movie);
                     _logger.LogInformation($"Stored: {title} on {releaseDate:yyyy-MM-dd}");
                 }
                 else if (NeedsUpdate(existing))
                 {
-                    await UpdateExistingMovieAsync(existing, cleanTitle, releaseDate, fullLink);
+                    await UpdateExistingMovieAsync(existing, cleanTitle, releaseDate, fullLink, genres, cancellationToken);
                     await _movieRepository.UpdateMovieAsync(existing);
                     _logger.LogInformation($"Updated existing movie: {title} on {releaseDate:yyyy-MM-dd}");
                 }
@@ -147,13 +148,13 @@ namespace MovieReleaseCalendar.API.Services
         // HTML Helper Methods moved to ScraperService.HtmlHelpers.cs
         // Movie Building and Updating methods moved to ScraperService.MovieBuilding.cs
 
-        protected async Task<(TmDbResponse Result, HttpResponseMessage Response)> TmdbSearchAsync<T>(string title, int year)
+        protected async Task<(TmDbResponse Result, HttpResponseMessage Response)> TmdbSearchAsync<T>(string title, int year, CancellationToken cancellationToken = default)
         {
             var tmdbUrl = $"https://api.themoviedb.org/3/search/movie?query={Uri.EscapeDataString(title)}&language=en-US&year={year}";
-            return await MakeApiCall<TmDbResponse>(tmdbUrl);
+            return await MakeApiCall<TmDbResponse>(tmdbUrl, cancellationToken: cancellationToken);
         }
 
-        private async Task<(T Result, HttpResponseMessage Response)> MakeApiCall<T>(string requestUri, AuthenticationHeaderValue authHeader = null, HttpMethod method = null, HttpContent content = null, bool includeResponse = false)
+        private async Task<(T Result, HttpResponseMessage Response)> MakeApiCall<T>(string requestUri, AuthenticationHeaderValue authHeader = null, HttpMethod method = null, HttpContent content = null, bool includeResponse = false, CancellationToken cancellationToken = default)
         {
             method ??= HttpMethod.Get;
             authHeader ??= new AuthenticationHeaderValue("Bearer", _tmdbApiKey);
@@ -166,7 +167,7 @@ namespace MovieReleaseCalendar.API.Services
             HttpResponseMessage response;
             try
             {
-                response = await _client.SendAsync(request);
+                response = await _client.SendAsync(request, cancellationToken);
             }
             catch (HttpRequestException ex)
             {

@@ -6,20 +6,21 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace MovieReleaseCalendar.API.Services
 {
     public partial class ScraperService
     {
-        protected async Task<string> TryFetchHtmlForYearAsync(int year)
+        protected async Task<string> TryFetchHtmlForYearAsync(int year, CancellationToken cancellationToken = default)
         {
             var url = $"https://www.firstshowing.net/schedule{year}";
             _logger.LogInformation($"Fetching: {url}");
 
             try
             {
-                return await _client.GetStringAsync(url);
+                return await _client.GetStringAsync(url, cancellationToken);
             }
             catch (Exception ex)
             {

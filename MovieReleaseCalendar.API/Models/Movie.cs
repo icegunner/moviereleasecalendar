@@ -1,26 +1,26 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace MovieReleaseCalendar.API.Models
 {
     public class Movie
     {
-        [JsonPropertyName("id")]
+        [JsonProperty("id")]
         public string Id { get; set; } = string.Empty;
-        [JsonPropertyName("title")]
+        [JsonProperty("title")]
         public string Title { get; set; } = string.Empty;
-        [JsonPropertyName("releaseDate")]
+        [JsonProperty("releaseDate")]
         public DateTime ReleaseDate { get; set; }
-        [JsonPropertyName("url")]
+        [JsonProperty("url")]
         public string Url { get; set; } = string.Empty;
-        [JsonPropertyName("description")]
+        [JsonProperty("description")]
         public string Description { get; set; } = string.Empty;
-        [JsonPropertyName("genres")]
+        [JsonProperty("genres")]
         public List<string> Genres { get; set; } = new List<string>();
-        [JsonPropertyName("posterUrl")]
+        [JsonProperty("posterUrl")]
         public string PosterUrl { get; set; } = string.Empty;
-        [JsonPropertyName("scrapedAt")]
+        [JsonProperty("scrapedAt")]
         public DateTimeOffset ScrapedAt { get; set; } = DateTimeOffset.UtcNow;
     }
 }

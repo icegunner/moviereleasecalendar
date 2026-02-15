@@ -64,13 +64,13 @@ namespace MovieReleaseCalendar.Tests
             public virtual new string NormalizeLink(HtmlAgilityPack.HtmlNode anchor) => base.NormalizeLink(anchor);
             public virtual new DateTime? GetDateFromTag(HtmlAgilityPack.HtmlNode tag, int year) => base.GetDateFromTag(tag, year);
             public virtual new bool NeedsUpdate(Movie movie) => base.NeedsUpdate(movie);
-            public virtual new Task<List<TmDbGenre>> LoadGenresAsync() => base.LoadGenresAsync();
-            public virtual new Task<(string, string)> GetMovieCreditsFromTmDbAsync(int movieId) => base.GetMovieCreditsFromTmDbAsync(movieId);
-            public virtual new Task<(int, string, List<string>, string)> GetMovieDetailsFromTmdbAsync(string title, DateTime releaseDate) => base.GetMovieDetailsFromTmdbAsync(title, releaseDate);
-            public virtual new Task<Movie> BuildNewMovieAsync(string title, string cleanTitle, DateTime releaseDate, string fullLink, string id) => base.BuildNewMovieAsync(title, cleanTitle, releaseDate, fullLink, id);
-            public virtual new Task UpdateExistingMovieAsync(Movie movie, string cleanTitle, DateTime releaseDate, string fullLink) => base.UpdateExistingMovieAsync(movie, cleanTitle, releaseDate, fullLink);
+            public virtual new Task<List<TmDbGenre>> LoadGenresAsync(CancellationToken cancellationToken = default) => base.LoadGenresAsync(cancellationToken);
+            public virtual new Task<(string, string)> GetMovieCreditsFromTmDbAsync(int movieId, CancellationToken cancellationToken = default) => base.GetMovieCreditsFromTmDbAsync(movieId, cancellationToken);
+            public virtual new Task<(int, string, List<string>, string)> GetMovieDetailsFromTmdbAsync(string title, DateTime releaseDate, List<TmDbGenre> genres, CancellationToken cancellationToken = default) => base.GetMovieDetailsFromTmdbAsync(title, releaseDate, genres, cancellationToken);
+            public virtual new Task<Movie> BuildNewMovieAsync(string title, string cleanTitle, DateTime releaseDate, string fullLink, string id, List<TmDbGenre> genres, CancellationToken cancellationToken = default) => base.BuildNewMovieAsync(title, cleanTitle, releaseDate, fullLink, id, genres, cancellationToken);
+            public virtual new Task UpdateExistingMovieAsync(Movie movie, string cleanTitle, DateTime releaseDate, string fullLink, List<TmDbGenre> genres, CancellationToken cancellationToken = default) => base.UpdateExistingMovieAsync(movie, cleanTitle, releaseDate, fullLink, genres, cancellationToken);
             public virtual new Task DeleteNonExistingMovies(int[] years, HashSet<string> seen) => base.DeleteNonExistingMovies(years, seen);
-            public virtual new Task ProcessMovieTitlesAsync(HtmlAgilityPack.HtmlNode tag, DateTime releaseDate, HashSet<string> seen, List<Movie> results) => base.ProcessMovieTitlesAsync(tag, releaseDate, seen, results);
+            public virtual new Task ProcessMovieTitlesAsync(HtmlAgilityPack.HtmlNode tag, DateTime releaseDate, HashSet<string> seen, List<Movie> results, List<TmDbGenre> genres, CancellationToken cancellationToken = default) => base.ProcessMovieTitlesAsync(tag, releaseDate, seen, results, genres, cancellationToken);
         }
 
         private readonly Mock<ILogger<ScraperService>> _loggerMock = new();
@@ -282,7 +282,7 @@ namespace MovieReleaseCalendar.Tests
         {
             var service = CreateTestableService(new TestMovieRepository(), apiKey: null);
             var before = DateTimeOffset.UtcNow.AddSeconds(-5);
-            var result = await service.BuildNewMovieAsync("Test", "Test", new DateTime(2024, 6, 1), "https://example.com", "test_2024-06-01");
+            var result = await service.BuildNewMovieAsync("Test", "Test", new DateTime(2024, 6, 1), "https://example.com", "test_2024-06-01", new List<TmDbGenre>());
             var after = DateTimeOffset.UtcNow.AddSeconds(5);
             Assert.True(result.ScrapedAt >= before && result.ScrapedAt <= after);
         }
@@ -373,7 +373,7 @@ namespace MovieReleaseCalendar.Tests
         {
             public MockedScraperService(IMovieRepository repo, ILogger<ScraperService> logger, IHttpClientFactory httpClientFactory, IConfiguration configuration)
                 : base(repo, logger, httpClientFactory, configuration) { }
-            public override Task<List<TmDbGenre>> LoadGenresAsync()
+            public override Task<List<TmDbGenre>> LoadGenresAsync(CancellationToken cancellationToken = default)
                 => Task.FromResult(new List<TmDbGenre> { new TmDbGenre { Id = 99, Name = "MockGenre" } });
         }
 
@@ -474,7 +474,7 @@ namespace MovieReleaseCalendar.Tests
         public async Task GetMovieDetailsFromTmdbAsync_ReturnsDefaultsOnTmdbError()
         {
             var service = CreateTestableService(new TestMovieRepository(), httpClient: new HttpClient(new FakeHttpMessageHandler(new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError))));
-            var result = await service.GetMovieDetailsFromTmdbAsync("Test", new DateTime(2024, 6, 1));
+            var result = await service.GetMovieDetailsFromTmdbAsync("Test", new DateTime(2024, 6, 1), new List<TmDbGenre>());
             Assert.Equal(0, result.Item1);
             Assert.Equal("No description available", result.Item2);
             Assert.Empty(result.Item3);
@@ -515,7 +515,7 @@ namespace MovieReleaseCalendar.Tests
             var seen = new HashSet<string>();
             var results = new List<Movie>();
             var date = new DateTime(2024, 1, 1);
-            await service.ProcessMovieTitlesAsync(tag, date, seen, results);
+            await service.ProcessMovieTitlesAsync(tag, date, seen, results, new List<TmDbGenre>());
             Assert.Empty(results);
         }
     }

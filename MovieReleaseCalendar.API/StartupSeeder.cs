@@ -31,7 +31,7 @@ public class StartupSeeder : IHostedService
         {
             _logger.LogInformation("StartupSeeder: No movies found. Running scraper...");
             var scraper = scope.ServiceProvider.GetRequiredService<IScraperService>();
-            await scraper.ScrapeAsync();
+            await scraper.ScrapeAsync(cancellationToken);
             _logger.LogInformation("StartupSeeder: Scraper completed.");
         }
         else
