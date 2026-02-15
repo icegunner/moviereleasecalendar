@@ -66,8 +66,11 @@ namespace MovieReleaseCalendar.API.Services
 
         protected (string RawTitle, string CleanTitle, string NormalizedTitle) ExtractTitles(HtmlNode anchor)
         {
-            var rawTitle = anchor.InnerText.Trim();
+            var rawTitle = System.Net.WebUtility.HtmlDecode(anchor.InnerText).Trim();
             var cleanTitle = Regex.Replace(rawTitle, @"\s*\[.*?\]\s*$", "");
+            // Remove HTML-encoded emojis (&#nnnnn;) and actual Unicode emoji characters
+            cleanTitle = Regex.Replace(cleanTitle, @"&#\d+;", "").Trim();
+            cleanTitle = Regex.Replace(cleanTitle, @"[\p{So}\p{Cs}]+", "").Trim();
             var normalizedTitle = NormalizeTitle(cleanTitle);
             return (rawTitle, cleanTitle, normalizedTitle);
         }
@@ -105,7 +108,11 @@ namespace MovieReleaseCalendar.API.Services
         protected string NormalizeLink(HtmlNode anchor)
         {
             var link = anchor.GetAttributeValue("href", string.Empty).Trim();
-            return link.StartsWith("//") ? $"https:{link}" : link;
+            if (link.StartsWith("//"))
+                return $"https:{link}";
+            if (link.StartsWith("/"))
+                return $"https://www.firstshowing.net{link}";
+            return link;
         }
 
         protected DateTime? GetDateFromTag(HtmlNode tag, int year)

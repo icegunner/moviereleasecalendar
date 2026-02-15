@@ -40,6 +40,7 @@ namespace MovieReleaseCalendar.API.Services
                     Date = movie.ReleaseDate.Date,
                     Url = movie.Url,
                     Description = movie.Description,
+                    PosterUrl = movie.PosterUrl,
                     AllDay = true
                 }
             )

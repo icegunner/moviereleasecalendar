@@ -406,17 +406,19 @@ namespace MovieReleaseCalendar.Tests
         }
 
         [Theory]
-        [InlineData("Test Movie [2024]", "Test Movie", "testmovie")]
-        [InlineData("Another Title", "Another Title", "anothertitle")]
-        public void ExtractTitles_NormalizesCorrectly(string raw, string clean, string normalized)
+        [InlineData("Test Movie [2024]", "Test Movie [2024]", "Test Movie", "testmovie")]
+        [InlineData("Another Title", "Another Title", "Another Title", "anothertitle")]
+        [InlineData("Shiver &#129416;", "Shiver \ud83e\udd88", "Shiver", "shiver")]
+        [InlineData("Shiver \ud83e\udd88", "Shiver \ud83e\udd88", "Shiver", "shiver")]
+        public void ExtractTitles_NormalizesCorrectly(string inputHtml, string expectedRaw, string clean, string normalized)
         {
             var service = CreateTestableService(new TestMovieRepository());
-            var html = $"<a>{raw}</a>";
+            var html = $"<a>{inputHtml}</a>";
             var doc = new HtmlAgilityPack.HtmlDocument();
             doc.LoadHtml(html);
             var anchor = doc.DocumentNode.SelectSingleNode("//a");
             var (r, c, n) = service.ExtractTitles(anchor);
-            Assert.Equal(raw, r);
+            Assert.Equal(expectedRaw, r);
             Assert.Equal(clean, c);
             Assert.Equal(normalized, n);
         }
@@ -424,7 +426,7 @@ namespace MovieReleaseCalendar.Tests
         [Theory]
         [InlineData("//example.com", "https://example.com")]
         [InlineData("https://foo.com", "https://foo.com")]
-        [InlineData("/relative", "/relative")]
+        [InlineData("/relative", "https://www.firstshowing.net/relative")]
         public void NormalizeLink_HandlesVariousLinks(string href, string expected)
         {
             var service = CreateTestableService(new TestMovieRepository());

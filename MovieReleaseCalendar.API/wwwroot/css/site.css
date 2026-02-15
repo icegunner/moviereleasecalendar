@@ -93,9 +93,34 @@ h1 {
   border: 1.5px solid #334155;
   pointer-events: none;
   transition: opacity var(--transition), box-shadow var(--transition);
-  max-width: 320px;
+  max-width: 420px;
   word-break: break-word;
   z-index: 1000;
+}
+.fc-tooltip-inner {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.fc-tooltip-poster {
+  max-height: 160px;
+  width: auto;
+  min-width: 60px;
+  max-width: 110px;
+  border-radius: 6px;
+  object-fit: contain;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  align-self: center;
+}
+.fc-tooltip-divider {
+  width: 1.5px;
+  background: #475569;
+  margin: 0 12px;
+  flex-shrink: 0;
+}
+.fc-tooltip-text {
+  flex: 1;
+  min-width: 0;
 }
 
 /* --- HEADER & TOOLBAR --- */

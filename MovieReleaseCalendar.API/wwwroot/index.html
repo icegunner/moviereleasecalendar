@@ -108,12 +108,23 @@
                             info.event._def.extendedProps?.description ||
                             "";
                         if (description) {
+                            const posterUrl =
+                                info.event.extendedProps?.posterUrl ||
+                                info.event._def.extendedProps?.posterUrl ||
+                                "";
                             const tooltip = document.createElement("div");
-                            // Replace \n with <br> for line breaks
-                            tooltip.innerHTML = description.replace(
-                                /\n/g,
-                                "<br>"
-                            );
+                            // Build tooltip content with optional poster
+                            let tooltipHtml = "";
+                            if (posterUrl) {
+                                tooltipHtml += `<div class="fc-tooltip-inner">`;
+                                tooltipHtml += `<img class="fc-tooltip-poster" src="${posterUrl}" alt="Poster" />`;
+                                tooltipHtml += `<div class="fc-tooltip-divider"></div>`;
+                                tooltipHtml += `<div class="fc-tooltip-text">${description.replace(/\n/g, "<br>")}</div>`;
+                                tooltipHtml += `</div>`;
+                            } else {
+                                tooltipHtml = description.replace(/\n/g, "<br>");
+                            }
+                            tooltip.innerHTML = tooltipHtml;
                             tooltip.style.position = "absolute";
                             tooltip.style.background = "#222";
                             tooltip.style.color = "#fff";
