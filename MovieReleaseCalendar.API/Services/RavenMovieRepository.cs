@@ -37,7 +37,6 @@ namespace MovieReleaseCalendar.API.Services
                     return "movies";
                 return DocumentConventions.DefaultGetCollectionName(type);
             };
-            store.Conventions.MaxNumberOfRequestsPerSession = int.MaxValue;
             store.Conventions.RegisterAsyncIdConvention<Movie>((dbname, metadata) => Task.FromResult($"movie/{metadata.Id}"));
             store.Initialize();
             return store;

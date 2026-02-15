@@ -24,6 +24,7 @@ services:
     environment:
       - SCHEDULE=0 0 * * 0  # every Sunday at 12am (https://en.wikipedia.org/wiki/Cron)
       - ASPNETCORE_URLS=http://+:8080
+      - TMDB_APIKEY=${TMDB_APIKEY}  # Set via .env file or shell environment
     restart: unless-stopped
 
 volumes:

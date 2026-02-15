@@ -20,18 +20,11 @@ namespace MovieReleaseCalendar.API.Controllers
         }
 
         [HttpGet("events.json")]
-        public async Task<IActionResult> GetJsonEvents([FromQuery] string start, [FromQuery] string end)
+        public async Task<IActionResult> GetJsonEvents([FromQuery] DateTime? start, [FromQuery] DateTime? end)
         {
             try
             {
-                DateTime? startDate = null;
-                DateTime? endDate = null;
-                if (!string.IsNullOrEmpty(start) && DateTime.TryParse(start, out var s))
-                    startDate = s.Date;
-                if (!string.IsNullOrEmpty(end) && DateTime.TryParse(end, out var e))
-                    endDate = e.Date;
-
-                var events = await _calendarService.GetCalendarEventsAsync(startDate, endDate);
+                var events = await _calendarService.GetCalendarEventsAsync(start?.Date, end?.Date);
                 return Ok(events);
             }
             catch (Exception ex)

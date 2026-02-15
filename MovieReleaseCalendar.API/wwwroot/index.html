@@ -124,6 +124,9 @@
                             tooltip.classList.add("fc-tooltip");
                             document.body.appendChild(tooltip);
 
+                            // Store reference so eventWillUnmount can clean up
+                            info.el._fcTooltip = tooltip;
+
                             info.el.addEventListener("mouseenter", (e) => {
                                 tooltip.style.display = "block";
                                 // Calculate position to keep tooltip in viewport
@@ -181,6 +184,13 @@
                             info.el.addEventListener("mouseleave", () => {
                                 tooltip.style.display = "none";
                             });
+                        }
+                    },
+                    eventWillUnmount: function (info) {
+                        // Remove tooltip from DOM to prevent memory leak
+                        if (info.el._fcTooltip) {
+                            info.el._fcTooltip.remove();
+                            delete info.el._fcTooltip;
                         }
                     },
                     eventClick: function (info) {
