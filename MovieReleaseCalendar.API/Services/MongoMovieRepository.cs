@@ -1,5 +1,6 @@
 using MovieReleaseCalendar.API.Models;
 using MongoDB.Driver;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -16,6 +17,17 @@ namespace MovieReleaseCalendar.API.Services
             _client = new MongoClient(connectionString);
             _database = _client.GetDatabase(dbName);
             _collection = _database.GetCollection<Movie>("movies");
+        }
+
+        public Task EnsureDatabaseReadyAsync()
+        {
+            // MongoDB creates databases and collections on first write automatically
+            return Task.CompletedTask;
+        }
+
+        public async Task<bool> HasMoviesAsync()
+        {
+            return await _collection.Find(Builders<Movie>.Filter.Empty).Limit(1).AnyAsync();
         }
 
         public async Task<List<Movie>> GetAllMoviesAsync()
@@ -38,6 +50,13 @@ namespace MovieReleaseCalendar.API.Services
         {
             var filter = Builders<Movie>.Filter.In(m => m.ReleaseDate.Year, years);
             return await _collection.Find(filter).ToListAsync();
+        }
+
+        public async Task<List<Movie>> GetMoviesInRangeAsync(DateTime start, DateTime end)
+        {
+            var filter = Builders<Movie>.Filter.Gte(m => m.ReleaseDate, start)
+                & Builders<Movie>.Filter.Lte(m => m.ReleaseDate, end);
+            return await _collection.Find(filter).SortBy(m => m.ReleaseDate).ToListAsync();
         }
 
         public async Task AddMovieAsync(Movie movie)

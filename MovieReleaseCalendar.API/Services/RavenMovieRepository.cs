@@ -43,6 +43,22 @@ namespace MovieReleaseCalendar.API.Services
             return store;
         }
 
+        public async Task EnsureDatabaseReadyAsync()
+        {
+            var dbName = _store.Database;
+            var dbRecord = await _store.Maintenance.Server.SendAsync(new Raven.Client.ServerWide.Operations.GetDatabaseRecordOperation(dbName));
+            if (dbRecord == null)
+            {
+                await _store.Maintenance.Server.SendAsync(new Raven.Client.ServerWide.Operations.CreateDatabaseOperation(new Raven.Client.ServerWide.DatabaseRecord(dbName)));
+            }
+        }
+
+        public async Task<bool> HasMoviesAsync()
+        {
+            using var session = _store.OpenAsyncSession();
+            return await session.Query<Movie>().AnyAsync();
+        }
+
         public async Task<List<Movie>> GetAllMoviesAsync()
         {
             using var session = _store.OpenAsyncSession();
@@ -67,6 +83,15 @@ namespace MovieReleaseCalendar.API.Services
 			using var session = _store.OpenAsyncSession();
 			var records = await session.Query<Movie>().ToListAsync();
 			return records.Where(m => years.Contains(m.ReleaseDate.Year)).ToList();
+        }
+
+        public async Task<List<Movie>> GetMoviesInRangeAsync(DateTime start, DateTime end)
+        {
+            using var session = _store.OpenAsyncSession();
+            var records = await session.Query<Movie>().ToListAsync();
+            return records.Where(m => m.ReleaseDate >= start && m.ReleaseDate <= end)
+                .OrderBy(m => m.ReleaseDate)
+                .ToList();
         }
 
         public async Task AddMovieAsync(Movie movie)

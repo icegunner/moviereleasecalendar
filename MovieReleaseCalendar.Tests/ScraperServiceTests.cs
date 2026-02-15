@@ -17,8 +17,11 @@ namespace MovieReleaseCalendar.Tests
     {
         private readonly Dictionary<string, Movie> _movies = new();
         public Task<Movie> GetMovieByIdAsync(string id) => Task.FromResult(_movies.TryGetValue(id, out var m) ? m : null);
+        public Task EnsureDatabaseReadyAsync() => Task.CompletedTask;
+        public Task<bool> HasMoviesAsync() => Task.FromResult(_movies.Count > 0);
         public Task<List<Movie>> GetMoviesByYearAsync(int year) => Task.FromResult(new List<Movie>(_movies.Values.Where(m => m.ReleaseDate.Year == year)));
         public Task<List<Movie>> GetMoviesByYearsAsync(int[] years) => Task.FromResult(new List<Movie>(_movies.Values.Where(m => years.Contains(m.ReleaseDate.Year))));
+        public Task<List<Movie>> GetMoviesInRangeAsync(DateTime start, DateTime end) => Task.FromResult(new List<Movie>(_movies.Values.Where(m => m.ReleaseDate >= start && m.ReleaseDate <= end).OrderBy(m => m.ReleaseDate)));
         public Task<List<Movie>> GetAllMoviesAsync() => Task.FromResult(new List<Movie>(_movies.Values));
         public Task AddMovieAsync(Movie movie) { _movies[movie.Id] = movie; return Task.CompletedTask; }
         public Task UpdateMovieAsync(Movie movie) { _movies[movie.Id] = movie; return Task.CompletedTask; }

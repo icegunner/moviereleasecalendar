@@ -71,7 +71,7 @@ namespace MovieReleaseCalendar.API.Background
 					try
 					{
 						using var scope = _serviceProvider.CreateScope();
-						var scraper = scope.ServiceProvider.GetRequiredService<ScraperService>();
+						var scraper = scope.ServiceProvider.GetRequiredService<IScraperService>();
 						var movies = await scraper.ScrapeAsync();
 						_logger.LogInformation($"Scraped {movies.Count} new movies at {DateTime.UtcNow:u}");
 					}

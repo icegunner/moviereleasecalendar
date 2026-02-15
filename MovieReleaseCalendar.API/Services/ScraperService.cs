@@ -176,7 +176,8 @@ namespace MovieReleaseCalendar.API.Services
 
             if (!response.IsSuccessStatusCode)
             {
-                response.Dispose();
+                if (!includeResponse)
+                    response.Dispose();
                 return (default, includeResponse ? response : null);
             }
 

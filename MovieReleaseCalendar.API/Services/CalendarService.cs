@@ -3,7 +3,6 @@ using Ical.Net.DataTypes;
 using Ical.Net.Serialization;
 using Microsoft.Extensions.Logging;
 using MovieReleaseCalendar.API.Models;
-using Raven.Client.Documents;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,52 +12,26 @@ namespace MovieReleaseCalendar.API.Services
 {
     public class CalendarService : ICalendarService
     {
-        private readonly IDocumentStore _store;
+        private readonly IMovieRepository _movieRepository;
         private readonly ILogger<CalendarService> _logger;
 
-        public CalendarService(IDocumentStore store, ILogger<CalendarService> logger)
+        public CalendarService(IMovieRepository movieRepository, ILogger<CalendarService> logger)
         {
-            _store = store;
+            _movieRepository = movieRepository;
             _logger = logger;
         }
 
         public async Task<List<MovieCalendarEvent>> GetCalendarEventsAsync()
         {
-            using var session = _store.OpenAsyncSession();
-
-            var movies = await session
-                .Query<Movie>()
-                .Where(m => m.ReleaseDate >= DateTime.Today.AddYears(-1) && m.ReleaseDate <= DateTime.Today.AddYears(2))
-                .OrderBy(m => m.ReleaseDate)
-                .ToListAsync();
-
-            return movies.Select(movie =>
-				new MovieCalendarEvent
-				{
-					Title = $"🎬 {movie.Title}",
-					Date = movie.ReleaseDate.Date,
-					Url = movie.Url,
-					Description = movie.Description,
-					AllDay = true
-				}
-			)
-			.ToList();
+            return await GetCalendarEventsAsync(null, null);
         }
 
         public async Task<List<MovieCalendarEvent>> GetCalendarEventsAsync(DateTime? start, DateTime? end)
         {
-            using var session = _store.OpenAsyncSession();
+            var queryStart = start ?? DateTime.Today.AddYears(-1);
+            var queryEnd = end ?? DateTime.Today.AddYears(2);
 
-            DateTime defaultStart = DateTime.Today.AddYears(-1);
-            DateTime defaultEnd = DateTime.Today.AddYears(2);
-            var queryStart = start ?? defaultStart;
-            var queryEnd = end ?? defaultEnd;
-
-            var movies = await session
-                .Query<Movie>()
-                .Where(m => m.ReleaseDate >= queryStart && m.ReleaseDate <= queryEnd)
-                .OrderBy(m => m.ReleaseDate)
-                .ToListAsync();
+            var movies = await _movieRepository.GetMoviesInRangeAsync(queryStart, queryEnd);
 
             return movies.Select(movie =>
                 new MovieCalendarEvent
