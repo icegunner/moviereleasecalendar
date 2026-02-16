@@ -47,13 +47,23 @@ namespace MovieReleaseCalendar.API.Services
 
         public async Task<List<Movie>> GetMoviesByYearAsync(int year)
 		{
-			var filter = Builders<Movie>.Filter.Eq(m => m.ReleaseDate.Year, year);
+			var start = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+			var end = new DateTime(year + 1, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+			var filter = Builders<Movie>.Filter.Gte(m => m.ReleaseDate, start)
+				& Builders<Movie>.Filter.Lt(m => m.ReleaseDate, end);
 			return await _collection.Find(filter).ToListAsync();
 		}
 
         public async Task<List<Movie>> GetMoviesByYearsAsync(int[] years)
         {
-            var filter = Builders<Movie>.Filter.In(m => m.ReleaseDate.Year, years);
+            var filters = years.Select(y =>
+            {
+                var start = new DateTime(y, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+                var end = new DateTime(y + 1, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+                return Builders<Movie>.Filter.Gte(m => m.ReleaseDate, start)
+                     & Builders<Movie>.Filter.Lt(m => m.ReleaseDate, end);
+            });
+            var filter = Builders<Movie>.Filter.Or(filters);
             return await _collection.Find(filter).ToListAsync();
         }
 
@@ -67,11 +77,7 @@ namespace MovieReleaseCalendar.API.Services
         public async Task AddMovieAsync(Movie movie)
         {
             var filter = Builders<Movie>.Filter.Eq(m => m.Id, movie.Id);
-            var existing = await _collection.Find(filter).FirstOrDefaultAsync();
-            if (existing == null)
-                await _collection.InsertOneAsync(movie);
-            else
-                await _collection.ReplaceOneAsync(filter, movie);
+            await _collection.ReplaceOneAsync(filter, movie, new ReplaceOptions { IsUpsert = true });
         }
 
         public async Task UpdateMovieAsync(Movie movie)
