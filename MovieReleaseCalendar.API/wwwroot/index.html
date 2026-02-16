@@ -335,6 +335,10 @@
                             if (data.imported > 0) parts.push(`Imported: ${data.imported}`);
                             if (data.updated > 0) parts.push(`Updated: ${data.updated}`);
                             showMessageModal(`Scraper completed successfully. ${parts.join(", ")}`, data.newMovies || [], data.updatedMovies || []);
+                        } else if (resp.status === 503) {
+                            const data = await resp.json().catch(() => null);
+                            const msg = data?.error || "Database is unreachable. Please try again later.";
+                            showMessageModal(`Scraper failed: ${msg}`);
                         } else {
                             showMessageModal("Failed to start scraper.");
                         }

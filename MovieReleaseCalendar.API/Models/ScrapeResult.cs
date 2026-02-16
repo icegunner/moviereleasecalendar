@@ -6,5 +6,7 @@ namespace MovieReleaseCalendar.API.Models
     {
         public List<Movie> NewMovies { get; set; } = new();
         public List<Movie> UpdatedMovies { get; set; } = new();
+        public string Error { get; set; }
+        public bool HasError => !string.IsNullOrEmpty(Error);
     }
 }

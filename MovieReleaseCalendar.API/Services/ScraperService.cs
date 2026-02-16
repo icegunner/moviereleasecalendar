@@ -49,6 +49,18 @@ namespace MovieReleaseCalendar.API.Services
                 return result;
             }
 
+            // Ensure the database exists and is reachable before proceeding
+            try
+            {
+                await _movieRepository.EnsureDatabaseReadyAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Database is unreachable or could not be initialized. Scraping aborted.");
+                result.Error = "Database is unreachable or could not be initialized.";
+                return result;
+            }
+
             var seen = new HashSet<string>();
             var genres = await LoadGenresAsync(cancellationToken);
 
