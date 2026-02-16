@@ -6,7 +6,7 @@ A self-hosted, Dockerized scraper and calendar that aggregates theatrical movie 
 
 - Scrapes theatrical wide-release titles from FirstShowing.net
 - Enriches movies with metadata from TMDb (genres, descriptions, posters)
-- Stores data in RavenDB (default), MongoDB, PostgreSQL, or MariaDB/MySQL
+- Stores data in RavenDB (default), MongoDB, PostgreSQL, MariaDB/MySQL, or SQLite
 - Produces an ICS feed compatible with iPhone, Google Calendar, and Outlook subscriptions
 - ICS events are all-day, transparent (won't block your schedule), with stable UIDs
 - Full-screen web calendar UI with light/dark mode
@@ -62,6 +62,7 @@ docker compose up -d
 | `MONGODB_DATABASE` | `MovieReleaseCalendar` | MongoDB database name |
 | `POSTGRESQL_CONNECTIONSTRING` | `Host=localhost;Database=MovieReleaseCalendar;Username=postgres;Password=postgres` | PostgreSQL connection string |
 | `MARIADB_CONNECTIONSTRING` | `Server=localhost;Database=MovieReleaseCalendar;User=root;Password=root` | MariaDB/MySQL connection string |
+| `SQLITE_PATH` | `data/movies.db` | SQLite database file path |
 | `TMDB_APIKEY` | — | TMDb API key for movie metadata |
 | `ASPNETCORE_URLS` | `http://+:8080` | Listening URL |
 
@@ -75,8 +76,20 @@ Set `MOVIECALENDAR_DB_PROVIDER` to one of the following values:
 | `mongo` or `mongodb` | MongoDB | Document database |
 | `postgres` or `postgresql` | PostgreSQL | Relational, via EF Core + Npgsql |
 | `maria`, `mariadb`, or `mysql` | MariaDB / MySQL | Relational, via EF Core + Pomelo |
+| `sqlite` | SQLite | File-based, via EF Core; use a bind mount in Docker for persistence |
 
-Connection strings can be set via environment variables (see above) or in `appsettings.json` under `RavenDb`, `MongoDb`, `PostgreSql`, or `MariaDb` sections. The PostgreSQL and MariaDB backends automatically create the database schema on first startup.
+Connection strings can be set via environment variables (see above) or in `appsettings.json` under `RavenDb`, `MongoDb`, `PostgreSql`, `MariaDb`, or `Sqlite` sections. The PostgreSQL, MariaDB, and SQLite backends automatically create the database schema on first startup.
+
+#### SQLite with Docker
+
+To persist the SQLite database across container restarts, use a bind mount:
+
+```yaml
+volumes:
+  - ./data:/data
+environment:
+  - SQLITE_PATH=/data/movies.db
+```
 
 ## 🐳 Docker
 

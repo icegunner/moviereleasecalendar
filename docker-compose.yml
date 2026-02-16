@@ -65,8 +65,12 @@ services:
       # - POSTGRESQL_CONNECTIONSTRING=Host=postgres;Database=MovieReleaseCalendar;Username=postgres;Password=postgres
       # MariaDB: set MOVIECALENDAR_DB_PROVIDER=mariadb
       # - MARIADB_CONNECTIONSTRING=Server=mariadb;Database=MovieReleaseCalendar;User=root;Password=root
+      # SQLite: set MOVIECALENDAR_DB_PROVIDER=sqlite
+      # - SQLITE_PATH=/data/movies.db
       - ASPNETCORE_URLS=http://+:8080
       - TMDB_APIKEY=${TMDB_APIKEY}
+    # volumes:
+    #   - ./data:/data  # Bind mount for SQLite persistence
     restart: unless-stopped
 
 volumes:

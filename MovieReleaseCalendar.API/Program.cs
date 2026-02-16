@@ -84,6 +84,13 @@ public class Program
                     builder.Services.AddScoped<IMovieRepository, EfMovieRepository>();
                     dbToLog = "PostgreSQL";
                     break;
+                case "sqlite":
+                    var sqlitePath = builder.Configuration["Sqlite:Path"] ?? Environment.GetEnvironmentVariable("SQLITE_PATH") ?? "data/movies.db";
+                    var sqliteConn = $"Data Source={sqlitePath}";
+                    builder.Services.AddDbContextFactory<MovieDbContext>(options => options.UseSqlite(sqliteConn));
+                    builder.Services.AddScoped<IMovieRepository, EfMovieRepository>();
+                    dbToLog = $"SQLite ({sqlitePath})";
+                    break;
                 case "maria":
                 case "mariadb":
                 case "mysql":
