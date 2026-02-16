@@ -1,5 +1,6 @@
 using MovieReleaseCalendar.API.Models;
 using MongoDB.Driver;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,17 +13,20 @@ namespace MovieReleaseCalendar.API.Services
         private readonly IMongoCollection<Movie> _collection;
         private readonly IMongoClient _client;
         private readonly IMongoDatabase _database;
+        private readonly ILogger<MongoMovieRepository> _logger;
 
-        public MongoMovieRepository(string connectionString, string dbName)
+        public MongoMovieRepository(string connectionString, string dbName, ILogger<MongoMovieRepository> logger)
         {
             _client = new MongoClient(connectionString);
             _database = _client.GetDatabase(dbName);
             _collection = _database.GetCollection<Movie>("movies");
+            _logger = logger;
         }
 
         public Task EnsureDatabaseReadyAsync()
         {
             // MongoDB creates databases and collections on first write automatically
+            _logger.LogInformation("MongoDB databases are created on first write; no explicit creation needed.");
             return Task.CompletedTask;
         }
 

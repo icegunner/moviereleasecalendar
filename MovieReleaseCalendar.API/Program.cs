@@ -72,7 +72,7 @@ public class Program
                 case "mongodb":
                     var mongoConn = builder.Configuration["MongoDb:ConnectionString"] ?? Environment.GetEnvironmentVariable("MONGODB_CONNECTIONSTRING") ?? "mongodb://localhost:27017";
                     var mongoDb = builder.Configuration["MongoDb:Database"] ?? Environment.GetEnvironmentVariable("MONGODB_DATABASE") ?? "MovieReleaseCalendar";
-                    builder.Services.AddSingleton<IMovieRepository>(sp => new MongoMovieRepository(mongoConn, mongoDb));
+                    builder.Services.AddSingleton<IMovieRepository>(sp => new MongoMovieRepository(mongoConn, mongoDb, sp.GetRequiredService<ILogger<MongoMovieRepository>>()));
                     dbToLog = "MongoDB";
                     break;
                 default:

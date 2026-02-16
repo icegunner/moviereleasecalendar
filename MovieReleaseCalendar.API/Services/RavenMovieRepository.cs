@@ -8,15 +8,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace MovieReleaseCalendar.API.Services
 {
     public class RavenMovieRepository : IMovieRepository
     {
         private readonly IDocumentStore _store;
-        public RavenMovieRepository(IDocumentStore store)
+        private readonly ILogger<RavenMovieRepository> _logger;
+        public RavenMovieRepository(IDocumentStore store, ILogger<RavenMovieRepository> logger)
         {
             _store = store;
+            _logger = logger;
         }
 
         public static IDocumentStore CreateDocumentStore(string ravenUrl, string ravenDb)
@@ -48,7 +51,13 @@ namespace MovieReleaseCalendar.API.Services
             var dbRecord = await _store.Maintenance.Server.SendAsync(new Raven.Client.ServerWide.Operations.GetDatabaseRecordOperation(dbName));
             if (dbRecord == null)
             {
+                _logger.LogInformation("RavenDB database '{DatabaseName}' does not exist. Creating...", dbName);
                 await _store.Maintenance.Server.SendAsync(new Raven.Client.ServerWide.Operations.CreateDatabaseOperation(new Raven.Client.ServerWide.DatabaseRecord(dbName)));
+                _logger.LogInformation("RavenDB database '{DatabaseName}' created successfully.", dbName);
+            }
+            else
+            {
+                _logger.LogInformation("RavenDB database '{DatabaseName}' already exists.", dbName);
             }
         }
 
