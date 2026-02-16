@@ -1,26 +1,76 @@
 version: '3.9'
 
 services:
-  mongodb:
-    image: mongo:8
+  ravendb:
+    image: ravendb/ravendb:ubuntu-latest
     ports:
-      - "27017:27017"
+      - "8081:8080"
+    environment:
+      - RAVEN_Setup_Mode=None
+      - RAVEN_Security_UnsecuredAccessAllowed=PublicNetwork
+      - RAVEN_License_Eula_Accepted=true
+      - RAVEN_ARGS="--log-to-console"
     volumes:
-      - mongodb-data:/data/db
+      - ravendb-data:/var/lib/ravendb/data
+
+  # mongodb:
+  #   image: mongo:4.4
+  #   ports:
+  #     - "27017:27017"
+  #   volumes:
+  #     - mongodb-data:/data/db
+
+  # postgres:
+  #   image: postgres:16
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     - POSTGRES_USER=postgres
+  #     - POSTGRES_PASSWORD=postgres
+  #     - POSTGRES_DB=MovieReleaseCalendar
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+
+  # mariadb:
+  #   image: mariadb:11
+  #   ports:
+  #     - "3306:3306"
+  #   environment:
+  #     - MARIADB_ROOT_PASSWORD=root
+  #     - MARIADB_DATABASE=MovieReleaseCalendar
+  #   volumes:
+  #     - mariadb-data:/var/lib/mysql
 
   moviereleasecalendar:
     image: ghcr.io/icegunner/moviereleasecalendar:latest
     depends_on:
-      - mongodb
+      - ravendb
+      # - mongodb
+      # - postgres
+      # - mariadb
     ports:
       - "8080:8080"
     environment:
-      - MOVIECALENDAR_DB_PROVIDER=mongodb
-      - MONGODB_CONNECTIONSTRING=mongodb://mongodb:27017
-      - MONGODB_DATABASE=MovieReleaseCalendar
+      # RavenDB (default)
+      - MOVIECALENDAR_DB_PROVIDER=ravendb
+      # - MOVIECALENDAR_DB_PROVIDER=mongodb
+      # - MOVIECALENDAR_DB_PROVIDER=postgresql
+      # - MOVIECALENDAR_DB_PROVIDER=mariadb
+      - RAVENDB_URL=http://ravendb:8080
+      - RAVENDB_DATABASE=MovieReleaseCalendar
+      # MongoDB: set MOVIECALENDAR_DB_PROVIDER=mongodb
+      # - MONGODB_CONNECTIONSTRING=mongodb://mongodb:27017
+      # - MONGODB_DATABASE=MovieReleaseCalendar
+      # PostgreSQL: set MOVIECALENDAR_DB_PROVIDER=postgresql
+      # - POSTGRESQL_CONNECTIONSTRING=Host=postgres;Database=MovieReleaseCalendar;Username=postgres;Password=postgres
+      # MariaDB: set MOVIECALENDAR_DB_PROVIDER=mariadb
+      # - MARIADB_CONNECTIONSTRING=Server=mariadb;Database=MovieReleaseCalendar;User=root;Password=root
       - ASPNETCORE_URLS=http://+:8080
-      - TMDB_APIKEY=${TMDB_APIKEY}  # Set via .env file or shell environment
+      - TMDB_APIKEY=${TMDB_APIKEY}
     restart: unless-stopped
 
 volumes:
-  mongodb-data:
+  ravendb-data:
+  # mongodb-data:
+  # postgres-data:
+  # mariadb-data:

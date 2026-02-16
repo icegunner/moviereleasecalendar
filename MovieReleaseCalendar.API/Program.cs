@@ -1,10 +1,12 @@
 using System;
 using System.Reflection;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MovieReleaseCalendar.API.Background;
+using MovieReleaseCalendar.API.Data;
 using MovieReleaseCalendar.API.Services;
 using NLog;
 using NLog.Web;
@@ -74,6 +76,22 @@ public class Program
                     var mongoDb = builder.Configuration["MongoDb:Database"] ?? Environment.GetEnvironmentVariable("MONGODB_DATABASE") ?? "MovieReleaseCalendar";
                     builder.Services.AddSingleton<IMovieRepository>(sp => new MongoMovieRepository(mongoConn, mongoDb, sp.GetRequiredService<ILogger<MongoMovieRepository>>()));
                     dbToLog = "MongoDB";
+                    break;
+                case "postgres":
+                case "postgresql":
+                    var pgConn = builder.Configuration["PostgreSql:ConnectionString"] ?? Environment.GetEnvironmentVariable("POSTGRESQL_CONNECTIONSTRING") ?? "Host=localhost;Database=MovieReleaseCalendar;Username=postgres;Password=postgres";
+                    builder.Services.AddDbContextFactory<MovieDbContext>(options => options.UseNpgsql(pgConn));
+                    builder.Services.AddScoped<IMovieRepository, EfMovieRepository>();
+                    dbToLog = "PostgreSQL";
+                    break;
+                case "maria":
+                case "mariadb":
+                case "mysql":
+                    var mariaConn = builder.Configuration["MariaDb:ConnectionString"] ?? Environment.GetEnvironmentVariable("MARIADB_CONNECTIONSTRING") ?? "Server=localhost;Database=MovieReleaseCalendar;User=root;Password=root";
+                    var serverVersion = ServerVersion.AutoDetect(mariaConn);
+                    builder.Services.AddDbContextFactory<MovieDbContext>(options => options.UseMySql(mariaConn, serverVersion));
+                    builder.Services.AddScoped<IMovieRepository, EfMovieRepository>();
+                    dbToLog = "MariaDB";
                     break;
                 default:
                     // Register RavenDB Document Store only if using RavenDB

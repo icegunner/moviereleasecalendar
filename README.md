@@ -6,7 +6,7 @@ A self-hosted, Dockerized scraper and calendar that aggregates theatrical movie 
 
 - Scrapes theatrical wide-release titles from FirstShowing.net
 - Enriches movies with metadata from TMDb (genres, descriptions, posters)
-- Stores data in RavenDB (default) or MongoDB
+- Stores data in RavenDB (default), MongoDB, PostgreSQL, or MariaDB/MySQL
 - Produces an ICS feed compatible with iPhone, Google Calendar, and Outlook subscriptions
 - ICS events are all-day, transparent (won't block your schedule), with stable UIDs
 - Full-screen web calendar UI with light/dark mode
@@ -55,13 +55,28 @@ docker compose up -d
 
 | Variable | Default | Description |
 |---|---|---|
-| `MOVIECALENDAR_DB_PROVIDER` | `ravendb` | Database provider (`ravendb` or `mongodb`) |
+| `MOVIECALENDAR_DB_PROVIDER` | `ravendb` | Database provider (see table below) |
 | `RAVENDB_URL` | `http://localhost:8080` | RavenDB server URL |
 | `RAVENDB_DATABASE` | `MovieReleaseCalendar` | RavenDB database name |
 | `MONGODB_CONNECTIONSTRING` | `mongodb://localhost:27017` | MongoDB connection string |
 | `MONGODB_DATABASE` | `MovieReleaseCalendar` | MongoDB database name |
+| `POSTGRESQL_CONNECTIONSTRING` | `Host=localhost;Database=MovieReleaseCalendar;Username=postgres;Password=postgres` | PostgreSQL connection string |
+| `MARIADB_CONNECTIONSTRING` | `Server=localhost;Database=MovieReleaseCalendar;User=root;Password=root` | MariaDB/MySQL connection string |
 | `TMDB_APIKEY` | — | TMDb API key for movie metadata |
 | `ASPNETCORE_URLS` | `http://+:8080` | Listening URL |
+
+### Database Providers
+
+Set `MOVIECALENDAR_DB_PROVIDER` to one of the following values:
+
+| Value | Backend | Notes |
+|---|---|---|
+| `ravendb` (default) | RavenDB | Document database |
+| `mongo` or `mongodb` | MongoDB | Document database |
+| `postgres` or `postgresql` | PostgreSQL | Relational, via EF Core + Npgsql |
+| `maria`, `mariadb`, or `mysql` | MariaDB / MySQL | Relational, via EF Core + Pomelo |
+
+Connection strings can be set via environment variables (see above) or in `appsettings.json` under `RavenDb`, `MongoDb`, `PostgreSql`, or `MariaDb` sections. The PostgreSQL and MariaDB backends automatically create the database schema on first startup.
 
 ## 🐳 Docker
 
