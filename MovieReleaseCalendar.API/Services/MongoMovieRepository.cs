@@ -74,6 +74,51 @@ namespace MovieReleaseCalendar.API.Services
             return await _collection.Find(filter).SortBy(m => m.ReleaseDate).ToListAsync();
         }
 
+        public async Task<List<Movie>> SearchMoviesAsync(SearchCriteria criteria)
+        {
+            var filterBuilder = Builders<Movie>.Filter;
+            var filters = new List<FilterDefinition<Movie>>();
+
+            if (!string.IsNullOrWhiteSpace(criteria.Q))
+                filters.Add(filterBuilder.Regex(m => m.Title, new MongoDB.Bson.BsonRegularExpression(criteria.Q, "i")));
+
+            if (!string.IsNullOrWhiteSpace(criteria.ImdbId))
+                filters.Add(filterBuilder.Eq(m => m.ImdbId, criteria.ImdbId));
+
+            if (!string.IsNullOrWhiteSpace(criteria.Rating))
+                filters.Add(filterBuilder.Eq(m => m.MpaaRating, criteria.Rating));
+
+            if (criteria.Year.HasValue)
+            {
+                var start = new DateTime(criteria.Year.Value, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+                var end = new DateTime(criteria.Year.Value + 1, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+                filters.Add(filterBuilder.Gte(m => m.ReleaseDate, start) & filterBuilder.Lt(m => m.ReleaseDate, end));
+            }
+
+            if (criteria.Month.HasValue)
+            {
+                // MongoDB doesn't natively filter by month on DateTime, so we load and filter in memory
+            }
+
+            var combinedFilter = filters.Count > 0 ? filterBuilder.And(filters) : filterBuilder.Empty;
+            var results = await _collection.Find(combinedFilter).SortBy(m => m.ReleaseDate).ToListAsync();
+
+            // Apply in-memory filters for fields that can't be easily queried in MongoDB
+            if (criteria.Month.HasValue)
+                results = results.Where(m => m.ReleaseDate.Month == criteria.Month.Value).ToList();
+
+            if (!string.IsNullOrWhiteSpace(criteria.Genre))
+                results = results.Where(m => m.Genres != null && m.Genres.Any(g => g.IndexOf(criteria.Genre, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
+
+            if (!string.IsNullOrWhiteSpace(criteria.Director))
+                results = results.Where(m => m.Directors != null && m.Directors.Any(d => d.IndexOf(criteria.Director, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
+
+            if (!string.IsNullOrWhiteSpace(criteria.Cast))
+                results = results.Where(m => m.Cast != null && m.Cast.Any(c => c.IndexOf(criteria.Cast, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
+
+            return results;
+        }
+
         public async Task AddMovieAsync(Movie movie)
         {
             var filter = Builders<Movie>.Filter.Eq(m => m.Id, movie.Id);

@@ -47,13 +47,40 @@ namespace MovieReleaseCalendar.API.Background
             _logger.LogInformation($"Next scrape scheduled for {_nextRun:u} using cron expression: {_cronExpression}");
         }
 
+        /// <summary>
+        /// Attempts to load the cron schedule from UserPreferences in the database.
+        /// Falls back to env var / config if preferences have no schedule set.
+        /// </summary>
+        private async Task<bool> TryLoadCronFromPreferencesAsync()
+        {
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var prefsRepo = scope.ServiceProvider.GetRequiredService<IPreferencesRepository>();
+                var prefs = await prefsRepo.GetPreferencesAsync();
+                if (!string.IsNullOrWhiteSpace(prefs.CronSchedule) && prefs.CronSchedule != _cronExpression)
+                {
+                    _cronExpression = prefs.CronSchedule;
+                    _cronSchedule = CrontabSchedule.Parse(_cronExpression);
+                    _nextRun = _cronSchedule.GetNextOccurrence(DateTime.UtcNow);
+                    _logger.LogInformation($"Loaded cron from preferences: {_cronExpression}. Next run: {_nextRun:u}");
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load cron schedule from preferences. Using current schedule.");
+            }
+            return false;
+        }
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             var scrapingSection = _configuration.GetSection("Scraping");
             var lastCron = _cronExpression;
             while (!stoppingToken.IsCancellationRequested)
             {
-                // Check for config changes or env var changes
+                // Check for config changes from env var, config file, or preferences
                 var envCron = Environment.GetEnvironmentVariable("SCHEDULE");
                 var currentCron = !string.IsNullOrWhiteSpace(envCron) ? envCron : scrapingSection["Cron"];
                 if (currentCron != lastCron)
@@ -62,6 +89,9 @@ namespace MovieReleaseCalendar.API.Background
                     LoadCronFromConfig();
                     lastCron = currentCron;
                 }
+
+                // Also check preferences for cron schedule changes
+                await TryLoadCronFromPreferencesAsync();
 
                 var now = DateTime.UtcNow;
 				if (_nextRun <= now)

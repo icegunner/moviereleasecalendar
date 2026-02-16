@@ -24,6 +24,11 @@ namespace MovieReleaseCalendar.API.Services
         private readonly string _tmdbApiKey;
         private bool _tmdbDisabled;
 
+        /// <summary>
+        /// Limits concurrent TMDb API calls to avoid rate-limiting.
+        /// </summary>
+        private static readonly SemaphoreSlim _tmdbThrottle = new SemaphoreSlim(4, 4);
+
         public ScraperService(IMovieRepository movieRepository, ILogger<ScraperService> logger, IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _movieRepository = movieRepository;
@@ -64,10 +69,18 @@ namespace MovieReleaseCalendar.API.Services
             var seen = new HashSet<string>();
             var genres = await LoadGenresAsync(cancellationToken);
 
-            foreach (var year in yearArray)
+            // Fetch HTML for all years in parallel
+            var htmlTasks = yearArray.Select(async year =>
+            {
+                var html = await TryFetchHtmlForYearAsync(year, cancellationToken);
+                return (Year: year, Html: html);
+            }).ToList();
+
+            var yearHtmls = await Task.WhenAll(htmlTasks);
+
+            foreach (var (year, html) in yearHtmls.OrderBy(y => y.Year))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var html = await TryFetchHtmlForYearAsync(year, cancellationToken);
                 if (string.IsNullOrEmpty(html)) continue;
 
                 var doc = new HtmlDocument();

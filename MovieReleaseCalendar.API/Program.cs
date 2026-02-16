@@ -41,6 +41,9 @@ public class Program
             // Add NLog to ASP.NET Core
             builder.Host.UseNLog();
 
+            // Add Swagger/OpenAPI services (conditionally enabled via preferences)
+            builder.Services.AddSwaggerGen();
+
             // Register RavenDB Document Store
             builder.Services
                 // Register repository based on environment variable
@@ -53,7 +56,19 @@ public class Program
                 // Add controllers and static files
                 .AddEndpointsApiExplorer()
                 .AddRouting()
-                .AddControllers();
+                .AddControllers()
+                .AddNewtonsoftJson();
+
+            // Configure CORS for React dev server
+            builder.Services.AddCors(options =>
+            {
+                options.AddDefaultPolicy(policy =>
+                {
+                    policy.AllowAnyOrigin()
+                          .AllowAnyMethod()
+                          .AllowAnyHeader();
+                });
+            });
 
             // Register repository based on environment variable
             var dbProvider = Environment.GetEnvironmentVariable("MOVIECALENDAR_DB_PROVIDER")?.ToLowerInvariant() ?? "ravendb";
@@ -75,6 +90,12 @@ public class Program
                     var mongoConn = builder.Configuration["MongoDb:ConnectionString"] ?? Environment.GetEnvironmentVariable("MONGODB_CONNECTIONSTRING") ?? "mongodb://localhost:27017";
                     var mongoDb = builder.Configuration["MongoDb:Database"] ?? Environment.GetEnvironmentVariable("MONGODB_DATABASE") ?? "MovieReleaseCalendar";
                     builder.Services.AddSingleton<IMovieRepository>(sp => new MongoMovieRepository(mongoConn, mongoDb, sp.GetRequiredService<ILogger<MongoMovieRepository>>()));
+                    builder.Services.AddSingleton<IPreferencesRepository>(sp =>
+                    {
+                        var mongoClient = new MongoDB.Driver.MongoClient(mongoConn);
+                        var database = mongoClient.GetDatabase(mongoDb);
+                        return new MongoPreferencesRepository(database, sp.GetRequiredService<ILogger<MongoPreferencesRepository>>());
+                    });
                     dbToLog = "MongoDB";
                     break;
                 case "postgres":
@@ -82,6 +103,7 @@ public class Program
                     var pgConn = builder.Configuration["PostgreSql:ConnectionString"] ?? Environment.GetEnvironmentVariable("POSTGRESQL_CONNECTIONSTRING") ?? "Host=localhost;Database=MovieReleaseCalendar;Username=postgres;Password=postgres";
                     builder.Services.AddDbContextFactory<MovieDbContext>(options => options.UseNpgsql(pgConn));
                     builder.Services.AddScoped<IMovieRepository, EfMovieRepository>();
+                    builder.Services.AddScoped<IPreferencesRepository, EfPreferencesRepository>();
                     dbToLog = "PostgreSQL";
                     break;
                 case "sqlite":
@@ -89,6 +111,7 @@ public class Program
                     var sqliteConn = $"Data Source={sqlitePath}";
                     builder.Services.AddDbContextFactory<MovieDbContext>(options => options.UseSqlite(sqliteConn));
                     builder.Services.AddScoped<IMovieRepository, EfMovieRepository>();
+                    builder.Services.AddScoped<IPreferencesRepository, EfPreferencesRepository>();
                     dbToLog = $"SQLite ({sqlitePath})";
                     break;
                 case "maria":
@@ -98,6 +121,7 @@ public class Program
                     var serverVersion = ServerVersion.AutoDetect(mariaConn);
                     builder.Services.AddDbContextFactory<MovieDbContext>(options => options.UseMySql(mariaConn, serverVersion));
                     builder.Services.AddScoped<IMovieRepository, EfMovieRepository>();
+                    builder.Services.AddScoped<IPreferencesRepository, EfPreferencesRepository>();
                     dbToLog = "MariaDB";
                     break;
                 default:
@@ -106,6 +130,10 @@ public class Program
                     var ravenDb = builder.Configuration["RavenDb:Database"] ?? Environment.GetEnvironmentVariable("RAVENDB_DATABASE") ?? "MovieReleaseCalendar";
                     builder.Services.AddSingleton(provider => RavenMovieRepository.CreateDocumentStore(ravenUrl, ravenDb));
                     builder.Services.AddScoped<IMovieRepository, RavenMovieRepository>();
+                    builder.Services.AddScoped<IPreferencesRepository>(sp =>
+                        new RavenPreferencesRepository(
+                            sp.GetRequiredService<Raven.Client.Documents.IDocumentStore>(),
+                            sp.GetRequiredService<ILogger<RavenPreferencesRepository>>()));
                     dbToLog = "RavenDB";
                     break;
             }
@@ -121,6 +149,18 @@ public class Program
             startupLogger.LogInformation($"{product} ({copyright}) - {description}");
             startupLogger.LogInformation($"Application starting. Version: {typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown"}.");
             startupLogger.LogInformation($"Using database provider: {dbToLog}");
+
+            // Enable CORS
+            app.UseCors();
+
+            // Conditionally enable Swagger based on config
+            var enableSwagger = builder.Configuration.GetValue<bool>("Swagger:Enabled", false);
+            if (enableSwagger)
+            {
+                app.UseSwagger();
+                app.UseSwaggerUI();
+                startupLogger.LogInformation("Swagger UI enabled at /swagger");
+            }
 
             app
                 .UseStaticFiles()

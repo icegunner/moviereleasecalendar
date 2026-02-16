@@ -72,6 +72,45 @@ namespace MovieReleaseCalendar.API.Services
                 .ToListAsync();
         }
 
+        public async Task<List<Movie>> SearchMoviesAsync(SearchCriteria criteria)
+        {
+            using var context = await _contextFactory.CreateDbContextAsync();
+            IQueryable<Movie> query = context.Movies;
+
+            if (!string.IsNullOrWhiteSpace(criteria.Q))
+                query = query.Where(m => EF.Functions.Like(m.Title, $"%{criteria.Q}%"));
+
+            if (!string.IsNullOrWhiteSpace(criteria.ImdbId))
+                query = query.Where(m => m.ImdbId == criteria.ImdbId);
+
+            if (!string.IsNullOrWhiteSpace(criteria.Rating))
+                query = query.Where(m => m.MpaaRating == criteria.Rating);
+
+            if (criteria.Year.HasValue)
+            {
+                var start = new DateTime(criteria.Year.Value, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+                var end = new DateTime(criteria.Year.Value + 1, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+                query = query.Where(m => m.ReleaseDate >= start && m.ReleaseDate < end);
+            }
+
+            if (criteria.Month.HasValue)
+                query = query.Where(m => m.ReleaseDate.Month == criteria.Month.Value);
+
+            // For Genre, Director, Cast we need to filter in-memory because they are stored as comma-separated text in EF
+            var results = await query.OrderBy(m => m.ReleaseDate).ToListAsync();
+
+            if (!string.IsNullOrWhiteSpace(criteria.Genre))
+                results = results.Where(m => m.Genres != null && m.Genres.Any(g => g.IndexOf(criteria.Genre, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
+
+            if (!string.IsNullOrWhiteSpace(criteria.Director))
+                results = results.Where(m => m.Directors != null && m.Directors.Any(d => d.IndexOf(criteria.Director, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
+
+            if (!string.IsNullOrWhiteSpace(criteria.Cast))
+                results = results.Where(m => m.Cast != null && m.Cast.Any(c => c.IndexOf(criteria.Cast, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
+
+            return results;
+        }
+
         public async Task AddMovieAsync(Movie movie)
         {
             using var context = await _contextFactory.CreateDbContextAsync();

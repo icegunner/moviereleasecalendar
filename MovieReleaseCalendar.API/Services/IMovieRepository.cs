@@ -14,6 +14,7 @@ namespace MovieReleaseCalendar.API.Services
         Task<List<Movie>> GetMoviesByYearAsync(int year);
         Task<List<Movie>> GetMoviesByYearsAsync(int[] years);
         Task<List<Movie>> GetMoviesInRangeAsync(DateTime start, DateTime end);
+        Task<List<Movie>> SearchMoviesAsync(SearchCriteria criteria);
         Task AddMovieAsync(Movie movie);
         Task UpdateMovieAsync(Movie movie);
         Task DeleteMovieAsync(string id);

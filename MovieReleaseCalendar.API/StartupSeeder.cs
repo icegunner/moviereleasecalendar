@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging;
 using System.Threading;
 using System.Threading.Tasks;
 using MovieReleaseCalendar.API.Services;
+using MovieReleaseCalendar.API.Controllers;
+using MovieReleaseCalendar.API.Models;
 using System;
 
 public class StartupSeeder : IHostedService
@@ -26,13 +28,31 @@ public class StartupSeeder : IHostedService
         // Ensure database is ready (e.g., RavenDB database creation)
         await movieRepository.EnsureDatabaseReadyAsync();
 
+        // Seed default preferences if not present
+        var preferencesRepo = scope.ServiceProvider.GetRequiredService<IPreferencesRepository>();
+        var existingPrefs = await preferencesRepo.GetPreferencesAsync();
+        if (existingPrefs.UpdatedAt == default)
+        {
+            _logger.LogInformation("StartupSeeder: Seeding default preferences...");
+            existingPrefs.UpdatedAt = DateTimeOffset.UtcNow;
+            await preferencesRepo.SavePreferencesAsync(existingPrefs);
+        }
+
         var hasMovies = await movieRepository.HasMoviesAsync();
         if (!hasMovies)
         {
             _logger.LogInformation("StartupSeeder: No movies found. Running scraper...");
-            var scraper = scope.ServiceProvider.GetRequiredService<IScraperService>();
-            await scraper.ScrapeAsync(cancellationToken);
-            _logger.LogInformation("StartupSeeder: Scraper completed.");
+            StatusController.IsSeeding = true;
+            try
+            {
+                var scraper = scope.ServiceProvider.GetRequiredService<IScraperService>();
+                await scraper.ScrapeAsync(cancellationToken);
+                _logger.LogInformation("StartupSeeder: Scraper completed.");
+            }
+            finally
+            {
+                StatusController.IsSeeding = false;
+            }
         }
         else
         {

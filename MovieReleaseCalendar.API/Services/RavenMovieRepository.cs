@@ -102,6 +102,39 @@ namespace MovieReleaseCalendar.API.Services
                 .ToList();
         }
 
+        public async Task<List<Movie>> SearchMoviesAsync(SearchCriteria criteria)
+        {
+            using var session = _store.OpenAsyncSession();
+            var records = await session.Query<Movie>().ToListAsync();
+            IEnumerable<Movie> results = records;
+
+            if (!string.IsNullOrWhiteSpace(criteria.Q))
+                results = results.Where(m => m.Title != null && m.Title.IndexOf(criteria.Q, StringComparison.OrdinalIgnoreCase) >= 0);
+
+            if (!string.IsNullOrWhiteSpace(criteria.ImdbId))
+                results = results.Where(m => m.ImdbId == criteria.ImdbId);
+
+            if (!string.IsNullOrWhiteSpace(criteria.Rating))
+                results = results.Where(m => m.MpaaRating != null && m.MpaaRating.Equals(criteria.Rating, StringComparison.OrdinalIgnoreCase));
+
+            if (criteria.Year.HasValue)
+                results = results.Where(m => m.ReleaseDate.Year == criteria.Year.Value);
+
+            if (criteria.Month.HasValue)
+                results = results.Where(m => m.ReleaseDate.Month == criteria.Month.Value);
+
+            if (!string.IsNullOrWhiteSpace(criteria.Genre))
+                results = results.Where(m => m.Genres != null && m.Genres.Any(g => g.IndexOf(criteria.Genre, StringComparison.OrdinalIgnoreCase) >= 0));
+
+            if (!string.IsNullOrWhiteSpace(criteria.Director))
+                results = results.Where(m => m.Directors != null && m.Directors.Any(d => d.IndexOf(criteria.Director, StringComparison.OrdinalIgnoreCase) >= 0));
+
+            if (!string.IsNullOrWhiteSpace(criteria.Cast))
+                results = results.Where(m => m.Cast != null && m.Cast.Any(c => c.IndexOf(criteria.Cast, StringComparison.OrdinalIgnoreCase) >= 0));
+
+            return results.OrderBy(m => m.ReleaseDate).ToList();
+        }
+
         public async Task AddMovieAsync(Movie movie)
 		{
 			using var session = _store.OpenAsyncSession();

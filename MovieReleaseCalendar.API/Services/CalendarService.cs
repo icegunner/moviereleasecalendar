@@ -44,7 +44,13 @@ namespace MovieReleaseCalendar.API.Services
                     Url = movie.Url,
                     Description = movie.Description,
                     PosterUrl = movie.PosterUrl,
-                    AllDay = true
+                    AllDay = true,
+                    TmdbId = movie.TmdbId,
+                    ImdbId = movie.ImdbId,
+                    MpaaRating = movie.MpaaRating,
+                    Genres = movie.Genres ?? new List<string>(),
+                    Directors = movie.Directors ?? new List<string>(),
+                    Cast = movie.Cast ?? new List<string>()
                 }
             )
             .ToList();
