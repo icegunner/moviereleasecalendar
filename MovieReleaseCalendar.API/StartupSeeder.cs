@@ -41,25 +41,34 @@ public class StartupSeeder : IHostedService
         var hasMovies = await movieRepository.HasMoviesAsync();
         if (!hasMovies)
         {
-            _logger.LogInformation("StartupSeeder: No movies found. Running scraper...");
+            _logger.LogInformation("StartupSeeder: No movies found. Launching scraper in background...");
             StatusController.IsSeeding = true;
-            try
+            // Fire-and-forget so the web server starts accepting requests immediately
+            _ = Task.Run(async () =>
             {
-                var scraper = scope.ServiceProvider.GetRequiredService<IScraperService>();
-                await scraper.ScrapeAsync(cancellationToken);
-                _logger.LogInformation("StartupSeeder: Scraper completed.");
-            }
-            finally
-            {
-                StatusController.IsSeeding = false;
-            }
+                try
+                {
+                    using var bgScope = _serviceProvider.CreateScope();
+                    var scraper = bgScope.ServiceProvider.GetRequiredService<IScraperService>();
+                    await scraper.ScrapeAsync(cancellationToken);
+                    _logger.LogInformation("StartupSeeder: Scraper completed.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "StartupSeeder: Scraper failed.");
+                }
+                finally
+                {
+                    StatusController.IsSeeding = false;
+                }
+            }, cancellationToken);
         }
         else
         {
             _logger.LogInformation("StartupSeeder: Movies already exist. Skipping seeding.");
         }
 
-        _logger.LogInformation("StartupSeeder: Seeding completed.");
+        _logger.LogInformation("StartupSeeder: Startup complete.");
         _logger.LogInformation("Ready to accept requests.");
     }
 

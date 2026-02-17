@@ -17,5 +17,6 @@ namespace MovieReleaseCalendar.API.Models
         public List<string> Genres { get; set; } = new List<string>();
         public List<string> Directors { get; set; } = new List<string>();
         public List<string> Cast { get; set; } = new List<string>();
+        public List<TrailerLink> Trailers { get; set; } = new List<TrailerLink>();
     }
 }

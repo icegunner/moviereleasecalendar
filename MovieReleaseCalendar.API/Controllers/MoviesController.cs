@@ -42,7 +42,8 @@ namespace MovieReleaseCalendar.API.Controllers
                     ImdbId = m.ImdbId,
                     Directors = m.Directors,
                     Cast = m.Cast,
-                    Description = m.Description
+                    Description = m.Description,
+                    Trailers = m.Trailers ?? new System.Collections.Generic.List<TrailerLink>()
                 }).ToList();
 
                 return Ok(results);
@@ -80,7 +81,8 @@ namespace MovieReleaseCalendar.API.Controllers
                     ImdbId = movie.ImdbId,
                     Directors = movie.Directors,
                     Cast = movie.Cast,
-                    Description = movie.Description
+                    Description = movie.Description,
+                    Trailers = movie.Trailers ?? new System.Collections.Generic.List<TrailerLink>()
                 });
             }
             catch (Exception ex)

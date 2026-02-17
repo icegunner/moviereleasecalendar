@@ -50,7 +50,8 @@ namespace MovieReleaseCalendar.API.Services
                     MpaaRating = movie.MpaaRating,
                     Genres = movie.Genres ?? new List<string>(),
                     Directors = movie.Directors ?? new List<string>(),
-                    Cast = movie.Cast ?? new List<string>()
+                    Cast = movie.Cast ?? new List<string>(),
+                    Trailers = movie.Trailers ?? new List<TrailerLink>()
                 }
             )
             .ToList();

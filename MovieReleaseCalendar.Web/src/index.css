@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* FullCalendar dark-mode overrides */
+.dark .fc {
+  --fc-border-color: #374151;
+  --fc-page-bg-color: #111827;
+  --fc-neutral-bg-color: #1f2937;
+  --fc-list-event-hover-bg-color: #1f2937;
+  --fc-today-bg-color: rgba(99, 102, 241, 0.08);
+}
+
+.dark .fc .fc-col-header-cell-cushion,
+.dark .fc .fc-daygrid-day-number {
+  color: #d1d5db;
+}
+
+.dark .fc .fc-button-primary {
+  background-color: #374151;
+  border-color: #4b5563;
+}
+
+.dark .fc .fc-button-primary:hover {
+  background-color: #4b5563;
+}
+
+.dark .fc .fc-button-primary:not(:disabled).fc-button-active {
+  background-color: #6366f1;
+  border-color: #6366f1;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #374151;
+}
+
+/* Center the FullCalendar toolbar title regardless of left/right content */
+.fc .fc-toolbar {
+  position: relative;
+}
+
+.fc .fc-toolbar .fc-toolbar-chunk:nth-child(2) {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* FullCalendar event tweaks */
+.fc .fc-event {
+  cursor: pointer;
+  border: none;
+  font-size: 0.75rem;
+  padding: 1px 3px;
+  border-radius: 3px;
+}
+
+.fc .fc-daygrid-event-dot {
+  display: none;
+}
+
+.fc .fc-daygrid-day-events {
+  min-height: 1.5em;
+}

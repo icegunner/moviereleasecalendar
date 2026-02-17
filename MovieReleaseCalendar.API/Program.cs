@@ -150,26 +150,42 @@ public class Program
             startupLogger.LogInformation($"Application starting. Version: {typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown"}.");
             startupLogger.LogInformation($"Using database provider: {dbToLog}");
 
-            // Enable CORS
-            app.UseCors();
-
-            // Conditionally enable Swagger based on config
-            var enableSwagger = builder.Configuration.GetValue<bool>("Swagger:Enabled", false);
-            if (enableSwagger)
+            // Gate Swagger access: check DB preference per request.
+            // This middleware MUST come before UseSwagger/UseSwaggerUI so it
+            // can short-circuit before Swagger handles the request.
+            app.Use(async (context, next) =>
             {
-                app.UseSwagger();
-                app.UseSwaggerUI();
-                startupLogger.LogInformation("Swagger UI enabled at /swagger");
-            }
-
-            app
-                .UseStaticFiles()
-                .UseRouting()
-                .UseEndpoints(endpoints =>
+                if (context.Request.Path.StartsWithSegments("/swagger"))
                 {
-                    endpoints.MapControllers();
-                    endpoints.MapFallbackToFile("index.html");
-                });
+                    var enableSwagger = builder.Configuration.GetValue<bool>("Swagger:Enabled", false);
+                    try
+                    {
+                        using var scope = app.Services.CreateScope();
+                        var prefsRepo = scope.ServiceProvider.GetRequiredService<IPreferencesRepository>();
+                        var dbPrefs = await prefsRepo.GetPreferencesAsync();
+                        if (dbPrefs != null)
+                            enableSwagger = dbPrefs.EnableSwagger;
+                    }
+                    catch { /* fall back to config */ }
+
+                    if (!enableSwagger)
+                    {
+                        context.Response.StatusCode = 404;
+                        return;
+                    }
+                }
+                await next();
+            });
+
+            app.UseSwagger();
+            app.UseSwaggerUI();
+
+            app.UseDefaultFiles();
+            app.UseStaticFiles();
+            app.UseRouting();
+            app.UseCors();
+            app.MapControllers();
+            app.MapFallbackToFile("index.html");
 
             app.Run();
         }

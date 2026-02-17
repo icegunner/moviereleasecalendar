@@ -20,21 +20,24 @@ namespace MovieReleaseCalendar.API.Services
             var directorsList = new List<string>();
             string imdbId = string.Empty;
             string mpaaRating = string.Empty;
+            var trailers = new List<TrailerLink>();
 
             if (tmdbDetails.Id != 0)
             {
-                // Parallelize the three independent TMDb follow-up calls
+                // Parallelize the independent TMDb follow-up calls
                 var creditsTask = GetMovieCreditsFromTmDbAsync(tmdbDetails.Id, cancellationToken);
                 var imdbTask = GetImdbIdAsync(tmdbDetails.Id, cancellationToken);
                 var ratingTask = GetMpaaRatingAsync(tmdbDetails.Id, cancellationToken);
+                var trailersTask = GetTrailersAsync(tmdbDetails.Id, cancellationToken);
 
-                await Task.WhenAll(creditsTask, imdbTask, ratingTask);
+                await Task.WhenAll(creditsTask, imdbTask, ratingTask, trailersTask);
 
                 var tmdbCredits = creditsTask.Result;
                 castList = tmdbCredits.Cast;
                 directorsList = tmdbCredits.Directors;
                 imdbId = imdbTask.Result;
                 mpaaRating = ratingTask.Result;
+                trailers = trailersTask.Result;
             }
 
             var castDisplay = castList.Count > 0 ? string.Join(", ", castList) : string.Empty;
@@ -54,6 +57,7 @@ namespace MovieReleaseCalendar.API.Services
                 Directors = directorsList,
                 Cast = castList,
                 MpaaRating = mpaaRating,
+                Trailers = trailers,
                 ScrapedAt = DateTimeOffset.UtcNow
             };
         }
@@ -66,20 +70,23 @@ namespace MovieReleaseCalendar.API.Services
             var directorsList = new List<string>();
             string imdbId = string.Empty;
             string mpaaRating = string.Empty;
+            var trailers = new List<TrailerLink>();
 
             if (tmdbDetails.Id != 0)
             {
                 var creditsTask = GetMovieCreditsFromTmDbAsync(tmdbDetails.Id, cancellationToken);
                 var imdbTask = GetImdbIdAsync(tmdbDetails.Id, cancellationToken);
                 var ratingTask = GetMpaaRatingAsync(tmdbDetails.Id, cancellationToken);
+                var trailersTask = GetTrailersAsync(tmdbDetails.Id, cancellationToken);
 
-                await Task.WhenAll(creditsTask, imdbTask, ratingTask);
+                await Task.WhenAll(creditsTask, imdbTask, ratingTask, trailersTask);
 
                 var tmdbCredits = creditsTask.Result;
                 castList = tmdbCredits.Cast;
                 directorsList = tmdbCredits.Directors;
                 imdbId = imdbTask.Result;
                 mpaaRating = ratingTask.Result;
+                trailers = trailersTask.Result;
             }
 
             var castDisplay = castList.Count > 0 ? string.Join(", ", castList) : string.Empty;
@@ -93,6 +100,7 @@ namespace MovieReleaseCalendar.API.Services
             movie.Directors = directorsList;
             movie.Cast = castList;
             movie.MpaaRating = mpaaRating;
+            movie.Trailers = trailers;
         }
 
         protected bool NeedsUpdate(Movie movie)
@@ -230,6 +238,71 @@ namespace MovieReleaseCalendar.API.Services
             {
                 _logger.LogError(ex, $"Failed to fetch MPAA rating for TMDb movie {tmdbId}.");
                 return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Fetches US English trailers and teasers from TMDb /movie/{id}/videos endpoint.
+        /// Returns full URLs for known sites (YouTube, Vimeo).
+        /// </summary>
+        protected async Task<List<TrailerLink>> GetTrailersAsync(int tmdbId, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrEmpty(_tmdbApiKey) || _tmdbDisabled)
+            {
+                return new List<TrailerLink>();
+            }
+
+            try
+            {
+                var url = $"https://api.themoviedb.org/3/movie/{tmdbId}/videos?api_key={_tmdbApiKey}";
+                var response = await MakeApiCall<TmdbVideosResponse>(url, cancellationToken: cancellationToken);
+
+                if (response.Result?.Results == null)
+                {
+                    return new List<TrailerLink>();
+                }
+
+                var trailers = new List<TrailerLink>();
+                foreach (var video in response.Result.Results)
+                {
+                    // Only US English trailers and teasers
+                    if (video.Iso639_1 != "en" || video.Iso3166_1 != "US")
+                        continue;
+                    if (video.Type != "Trailer" && video.Type != "Teaser")
+                        continue;
+
+                    var fullUrl = BuildVideoUrl(video.Site, video.Key);
+                    if (fullUrl == null)
+                        continue;
+
+                    trailers.Add(new TrailerLink
+                    {
+                        Name = video.Name,
+                        Url = fullUrl,
+                        Site = video.Site,
+                        PublishedAt = video.PublishedAt
+                    });
+                }
+
+                // Sort oldest first
+                trailers.Sort((a, b) => (a.PublishedAt ?? DateTimeOffset.MaxValue).CompareTo(b.PublishedAt ?? DateTimeOffset.MaxValue));
+
+                return trailers;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Failed to fetch trailers for TMDb movie {tmdbId}.");
+                return new List<TrailerLink>();
+            }
+        }
+
+        private static string BuildVideoUrl(string site, string key)
+        {
+            switch (site)
+            {
+                case "YouTube": return $"https://www.youtube.com/watch?v={key}";
+                case "Vimeo": return $"https://vimeo.com/{key}";
+                default: return null;
             }
         }
 

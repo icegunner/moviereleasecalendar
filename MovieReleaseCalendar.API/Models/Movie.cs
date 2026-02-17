@@ -32,5 +32,19 @@ namespace MovieReleaseCalendar.API.Models
         public List<string> Cast { get; set; } = new List<string>();
         [JsonProperty("mpaaRating")]
         public string MpaaRating { get; set; } = string.Empty;
+        [JsonProperty("trailers")]
+        public List<TrailerLink> Trailers { get; set; } = new List<TrailerLink>();
+    }
+
+    public class TrailerLink
+    {
+        [JsonProperty("name")]
+        public string Name { get; set; } = string.Empty;
+        [JsonProperty("url")]
+        public string Url { get; set; } = string.Empty;
+        [JsonProperty("site")]
+        public string Site { get; set; } = string.Empty;
+        [JsonProperty("publishedAt")]
+        public DateTimeOffset? PublishedAt { get; set; }
     }
 }

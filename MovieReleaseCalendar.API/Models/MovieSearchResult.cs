@@ -41,5 +41,8 @@ namespace MovieReleaseCalendar.API.Models
 
         [JsonProperty("description")]
         public string Description { get; set; } = string.Empty;
+
+        [JsonProperty("trailers")]
+        public List<TrailerLink> Trailers { get; set; } = new List<TrailerLink>();
     }
 }
