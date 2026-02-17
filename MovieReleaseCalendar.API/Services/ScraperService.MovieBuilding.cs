@@ -101,6 +101,7 @@ namespace MovieReleaseCalendar.API.Services
             movie.Cast = castList;
             movie.MpaaRating = mpaaRating;
             movie.Trailers = trailers;
+            movie.ScrapedAt = DateTimeOffset.UtcNow;
         }
 
         protected bool NeedsUpdate(Movie movie)
@@ -113,7 +114,8 @@ namespace MovieReleaseCalendar.API.Services
                    string.IsNullOrWhiteSpace(movie.ImdbId) ||
                    (movie.Directors == null || !movie.Directors.Any()) ||
                    (movie.Cast == null || !movie.Cast.Any()) ||
-                   string.IsNullOrWhiteSpace(movie.MpaaRating);
+                   string.IsNullOrWhiteSpace(movie.MpaaRating) ||
+                   movie.Trailers == null || !movie.Trailers.Any();
         }
 
         protected async Task<List<TmDbGenre>> LoadGenresAsync(CancellationToken cancellationToken = default)

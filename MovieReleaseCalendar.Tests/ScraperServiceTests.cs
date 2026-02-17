@@ -474,7 +474,8 @@ namespace MovieReleaseCalendar.Tests
                 ImdbId = expected ? string.Empty : "tt1234567",
                 Directors = expected ? new List<string>() : new List<string> { "Director" },
                 Cast = expected ? new List<string>() : new List<string> { "Actor" },
-                MpaaRating = expected ? string.Empty : "PG-13"
+                MpaaRating = expected ? string.Empty : "PG-13",
+                Trailers = expected ? new List<TrailerLink>() : new List<TrailerLink> { new TrailerLink { Name = "Trailer", Url = "https://youtube.com", Site = "YouTube" } }
             };
             Assert.Equal(expected, service.NeedsUpdate(movie));
         }

@@ -1,4 +1,4 @@
-import type { SearchCriteria, MovieSearchResult, Movie } from '../types';
+import type { SearchCriteria, MovieSearchResult } from '../types';
 
 const BASE = '';
 
@@ -20,7 +20,7 @@ export async function searchMovies(
   return res.json();
 }
 
-export async function getMovieById(id: string): Promise<Movie> {
+export async function getMovieById(id: string): Promise<MovieSearchResult> {
   const res = await fetch(`${BASE}/api/movies/${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error(`Movie not found: ${res.status}`);
   return res.json();
