@@ -1,0 +1,34 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vs
+.vscode
+*.code-workspace
+
+# Build outputs
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+
+# Frontend dev artifacts (rebuilt in Docker)
+MovieReleaseCalendar.Web/.vite/
+MovieReleaseCalendar.API/wwwroot/
+
+# Test project (not needed in production image)
+MovieReleaseCalendar.Tests/
+
+# Docker files
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Docs
+README.md
+IMPLEMENTATION_PLAN.md
+
+# Misc
+**/*.user
+**/logs/

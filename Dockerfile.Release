@@ -4,11 +4,9 @@ WORKDIR /app
 COPY MovieReleaseCalendar.Web/package*.json ./
 RUN npm ci
 COPY MovieReleaseCalendar.Web/ ./
-# Build outputs to ../MovieReleaseCalendar.API/wwwroot via vite config,
-# but in Docker we override outDir to a local dist folder
 RUN npx vite build --outDir /app/dist
 
-# Stage 2: Build .NET backend
+# Stage 2: Build .NET backend (Release, trimmed)
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend-build
 WORKDIR /src
 COPY ["MovieReleaseCalendar.API/MovieReleaseCalendar.API.csproj", "MovieReleaseCalendar.API/"]
@@ -18,10 +16,10 @@ COPY MovieReleaseCalendar.API/ MovieReleaseCalendar.API/
 # Copy frontend build output into wwwroot before publish
 COPY --from=frontend-build /app/dist MovieReleaseCalendar.API/wwwroot/
 WORKDIR "/src/MovieReleaseCalendar.API"
-RUN dotnet publish "MovieReleaseCalendar.API.csproj" -c Release -o /app/publish
+RUN dotnet publish "MovieReleaseCalendar.API.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-# Stage 3: Runtime
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+# Stage 3: Runtime (minimal)
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine
 WORKDIR /app
 EXPOSE 8080
 COPY --from=backend-build /app/publish .

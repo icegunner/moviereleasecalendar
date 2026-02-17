@@ -1,20 +1,27 @@
-# Use official ASP.NET Core runtime image
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+# Stage 1: Build React frontend
+FROM node:20-alpine AS frontend-build
 WORKDIR /app
-EXPOSE 8080
-EXPOSE 9229
+COPY MovieReleaseCalendar.Web/package*.json ./
+RUN npm ci
+COPY MovieReleaseCalendar.Web/ ./
+RUN npx vite build --outDir /app/dist
 
-# Build stage
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+# Stage 2: Build .NET backend (Debug)
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend-build
 WORKDIR /src
 COPY ["MovieReleaseCalendar.API/MovieReleaseCalendar.API.csproj", "MovieReleaseCalendar.API/"]
+COPY ["NuGet.config", "./"]
 RUN dotnet restore "MovieReleaseCalendar.API/MovieReleaseCalendar.API.csproj"
-COPY . .
+COPY MovieReleaseCalendar.API/ MovieReleaseCalendar.API/
+# Copy frontend build output into wwwroot before publish
+COPY --from=frontend-build /app/dist MovieReleaseCalendar.API/wwwroot/
 WORKDIR "/src/MovieReleaseCalendar.API"
 RUN dotnet publish "MovieReleaseCalendar.API.csproj" -c Debug -o /app/publish
 
-# Final stage
-FROM base AS final
+# Stage 3: Runtime
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
-COPY --from=build /app/publish .
+EXPOSE 8080
+EXPOSE 9229
+COPY --from=backend-build /app/publish .
 ENTRYPOINT ["dotnet", "MovieReleaseCalendar.API.dll"]
